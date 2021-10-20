@@ -96,10 +96,11 @@ def get_input_label():
 
     ##co
     min_pert, max_pert = -1e-3, 1e-3
-    #pert = torch.zeros((train_samples, self.Npole)) 
-    pert = (max_pert - min_pert) * torch.rand((npole)) + min_pert
+    pert = torch.zeros((npole)) 
+    #pert = (max_pert - min_pert) * torch.rand((npole)) + min_pert
     co = torch.zeros((npole)) + pert
     co[non_zero_ids] = non_zero_values
+    co = co/1000
 
     ##bi
     bi = torch.zeros(co.shape)
@@ -111,7 +112,7 @@ def test_model(num_images=1):
 
     network = get_network()
 
-    model_path = '/home/fish/Balaji/Documents/code/gumbel/models/exp7/40.pth'
+    model_path = '/home/fish/Balaji/Documents/code/RSL/gumbel/models/exp7/40.pth'
     print('model_path: ',model_path)
     network.load_state_dict(torch.load(model_path))
     network.eval()
@@ -119,19 +120,20 @@ def test_model(num_images=1):
     for i in range(num_images):
 
         data, label = get_input_label()
+        #data = data.unsqueeze(0)
         pred = network(data).detach().numpy()
 
         data = np.asarray(data)
         label = np.asarray(label)
         pred =  np.asarray(pred)
 
-        pred = (pred>=0.5).astype('int')
+        #pred = (pred>=0.5).astype('int')
 
         mse = ((label - pred)**2).mean()
         diff = abs(label - pred)
         
-        # for param in network.parameters():
-        #     print(param.data, param.data.shape)
+        for param in network.parameters():
+            print(param.name, param.data, param.data.shape, torch.mean(param.data))
 
         
         print('******* ',i,' ******')
@@ -151,12 +153,12 @@ if __name__ == "__main__":
 
     N = 80
     gpu_id = 1
-    lr = 1e-6
-    lr_steps = [20, 40, 90, 130]
+    lr = 1e-3
+    lr_steps = [20, 40, 80, 130]
     lr_drop = 0.1
     num_epochs = 150
     num_samples = 30000
-    model_root = '/home/fish/Balaji/Documents/code/gumbel/models/'
+    model_root = '/home/fish/Balaji/Documents/code/RSL/gumbel/models/'
     save_dir = model_root + '/exp7/'
     batch_size = 32
     num_workers = 24

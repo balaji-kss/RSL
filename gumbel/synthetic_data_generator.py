@@ -17,9 +17,9 @@ class gumbel_gen_syndata(Dataset):
 
         if self.eps != -1:
             min_pert, max_pert = -self.eps, self.eps
-            #pert = torch.zeros((train_samples, self.Npole)) 
-            pert = (max_pert - min_pert) * torch.rand((train_samples, \
-                    self. Npole)) + min_pert
+            pert = torch.zeros((train_samples, self.Npole)) 
+            # pert = (max_pert - min_pert) * torch.rand((train_samples, \
+            #         self. Npole)) + min_pert
         else:
             pert = torch.zeros((train_samples, self.Npole)) 
 
