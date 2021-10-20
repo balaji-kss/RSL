@@ -5,7 +5,7 @@ from torch.utils.data import Dataset
 
 class gumbel_gen_syndata(Dataset):
 
-    def __init__(self, Npole, num_sample, phase, train_frac=1.0, nonzero_frac_range=(0.3, 0.6), eps=1e-3):
+    def __init__(self, Npole, num_sample, phase, train_frac=1.0, nonzero_frac_range=(0.3, 0.6), eps=1e-2):
 
         self.Npole = Npole # dimension of c 
         self.num_sample = num_sample
@@ -17,9 +17,9 @@ class gumbel_gen_syndata(Dataset):
 
         if self.eps != -1:
             min_pert, max_pert = -self.eps, self.eps
-            pert = torch.zeros((train_samples, self.Npole)) 
-            # pert = (max_pert - min_pert) * torch.rand((train_samples, \
-            #         self. Npole)) + min_pert
+            #pert = torch.zeros((train_samples, self.Npole)) 
+            pert = (max_pert - min_pert) * torch.rand((train_samples, \
+                    self. Npole)) + min_pert
         else:
             pert = torch.zeros((train_samples, self.Npole)) 
 
@@ -31,6 +31,12 @@ class gumbel_gen_syndata(Dataset):
 
     def __len__(self):
         return self.coeff.shape[0]
+
+    def _get_nonzero_values(self, min_pert, max_pert, num_values):
+
+        non_zero_values = torch.randint(min_pert, max_pert, (num_values,), dtype=torch.float32) + torch.randn((num_values,), dtype=torch.float32)
+        
+        return non_zero_values
 
     def __getitem__(self, idx):
         
@@ -44,11 +50,21 @@ class gumbel_gen_syndata(Dataset):
         non_zero_ids = ids[:num_nonzeros]
         
         #non_zero_values = torch.randn((len(non_zero_ids)))
-        min_pert, max_pert = -1000, 1000
-        non_zero_values = torch.randint(min_pert, max_pert, (len(non_zero_ids),), dtype=torch.float32) + torch.randn((len(non_zero_ids),), dtype=torch.float32)
+        min_pert, max_pert = -1000, -1
+        num_values = len(non_zero_ids)//2
+        non_zero_values_n = self._get_nonzero_values(min_pert, max_pert, num_values)
         
+        min_pert, max_pert = 1, 1000
+        num_values = len(non_zero_ids) - len(non_zero_ids)//2
+        non_zero_values_p = self._get_nonzero_values(min_pert, max_pert, num_values)
+
+        non_zero_values = torch.cat((non_zero_values_p, non_zero_values_n))
         co = self.coeff[idx]
         co[non_zero_ids] = non_zero_values
+
+        #co = torch.pow(co, 2)
+        #co = torch.abs(co)
+
         bi = torch.zeros(co.shape)
         bi[non_zero_ids] = 1
         dict = {'coeff':co, 'binary':bi}

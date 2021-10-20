@@ -35,8 +35,8 @@ def train():
     network = get_network()
     network.cuda(gpu_id)
 
-    loss_fn = nn.MSELoss()
-    #loss_fn = nn.BCELoss()
+    loss_mse = nn.MSELoss()
+    loss_bce = nn.BCELoss()
 
     optimizer = Adam(network.parameters(), lr=lr, weight_decay=0.001)
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=lr_steps, gamma=lr_drop)
@@ -47,6 +47,7 @@ def train():
     print('lr_steps: ',lr_steps)
     print('lr_drop: ',lr_drop)
     print('num_epochs: ',num_epochs)
+    print('save dir ',save_dir)
     print('network ',network)
 
     for epoch in range(num_epochs):
@@ -54,6 +55,7 @@ def train():
         print('Epoch:', epoch, 'lr: ', scheduler.get_lr())
         start = time.time()
         MSE_loss = []
+        BCE_loss = []
 
         for i, sample in enumerate(train_dataloader):
 
@@ -62,17 +64,20 @@ def train():
             gt_coeff = sample['coeff'].cuda(gpu_id)
             gt_bi = sample['binary'].cuda(gpu_id)
             pred_bi = network(gt_coeff)
-            loss = loss_fn(pred_bi, gt_bi)
+            loss = loss_bce(pred_bi, gt_bi)
+            loss1 = loss_mse(pred_bi, gt_bi)
 
             loss.backward()
             optimizer.step()
 
-            MSE_loss.append(loss.data.item())
+            BCE_loss.append(loss.data.item())
+            MSE_loss.append(loss1.data.item())
 
-        loss_mse = np.mean(np.asarray(MSE_loss))
+        loss_mse_np = np.mean(np.asarray(MSE_loss))
+        loss_bce_np = np.mean(np.asarray(BCE_loss))
 
         train_mins = (time.time() - start) / 60 # 1 epoch training 
-        print('epoch:', epoch, 'time: ', round(train_mins, 3), 'mins loss:', round(loss_mse, 3))
+        print('epoch:', epoch, 'time: ', round(train_mins, 3), 'mins mse loss: ', round(loss_mse_np, 3), ' bce loss: ',round(loss_bce_np, 3))
         scheduler.step()
 
         if epoch % 2 == 0:
@@ -95,12 +100,12 @@ def get_input_label():
     #non_zero_values = torch.randn((len(non_zero_ids)))
 
     ##co
-    min_pert, max_pert = -1e-3, 1e-3
-    pert = torch.zeros((npole)) 
-    #pert = (max_pert - min_pert) * torch.rand((npole)) + min_pert
+    min_pert, max_pert = -1e-2, 1e-2
+    #pert = torch.zeros((npole)) 
+    pert = (max_pert - min_pert) * torch.rand((npole)) + min_pert
     co = torch.zeros((npole)) + pert
     co[non_zero_ids] = non_zero_values
-    co = co/1000
+    #co = co/1000
 
     ##bi
     bi = torch.zeros(co.shape)
@@ -112,7 +117,7 @@ def test_model(num_images=1):
 
     network = get_network()
 
-    model_path = '/home/fish/Balaji/Documents/code/RSL/gumbel/models/exp7/40.pth'
+    model_path = '/home/fish/Balaji/Documents/code/RSL/gumbel/models/exp7/134.pth'
     print('model_path: ',model_path)
     network.load_state_dict(torch.load(model_path))
     network.eval()
@@ -132,8 +137,8 @@ def test_model(num_images=1):
         mse = ((label - pred)**2).mean()
         diff = abs(label - pred)
         
-        for param in network.parameters():
-            print(param.name, param.data, param.data.shape, torch.mean(param.data))
+        # for param in network.parameters():
+        #     print(param.name, param.data, param.data.shape, torch.mean(param.data))
 
         
         print('******* ',i,' ******')
@@ -153,13 +158,13 @@ if __name__ == "__main__":
 
     N = 80
     gpu_id = 1
-    lr = 1e-3
-    lr_steps = [20, 40, 80, 130]
+    lr = 1e-2
+    lr_steps = [30, 60, 90, 120]
     lr_drop = 0.1
     num_epochs = 150
-    num_samples = 30000
+    num_samples = 500000
     model_root = '/home/fish/Balaji/Documents/code/RSL/gumbel/models/'
-    save_dir = model_root + '/exp7/'
+    save_dir = model_root + '/exp8/'
     batch_size = 32
     num_workers = 24
 

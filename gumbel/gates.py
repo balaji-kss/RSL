@@ -26,7 +26,6 @@ class GumbelGate(nn.Module):
         self.in_channels = in_channels
 
         self.gating_layers = [
-            Square(),
             nn.Linear(in_channels, in_channels),
         ]
 
@@ -42,7 +41,7 @@ class GumbelGate(nn.Module):
 
     def init_weights(self, gate_bias_init: float = 0.0) -> None:
 
-        for i in [1]:
+        for i in [0]:
 
             fc = self.gate_network[i]
             torch.nn.init.xavier_uniform_(fc.weight)
@@ -52,7 +51,10 @@ class GumbelGate(nn.Module):
         """Gumbel gates, Eq (8)"""
 
         #gate_inp_abs = torch.abs(gate_inp) 
-        #gate_inp_abs = Square.apply(gate_inp)
+        #gate_inp = Square(gate_inp)
+            
+        gate_inp = gate_inp/1000
+        gate_inp = torch.pow(gate_inp, 2)
         pi_log = self.gate_network(gate_inp)
 
         return self.gs(pi_log, force_hard=True)
