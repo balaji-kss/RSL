@@ -86,7 +86,7 @@ def train():
 def get_input_label():
 
     npole = 2*N+1
-    nonzero_frac = random.uniform(0.2, 0.4)
+    nonzero_frac = random.uniform(0.01, 0.05)
     ids = [i for i in range(npole)]
 
     for i in range(5):
@@ -113,16 +113,17 @@ def get_input_label():
 
     return co, bi
 
-def test_model(num_images=1):
+def test_model(num_samples=1, debug=1):
 
     network = get_network()
 
-    model_path = '/home/fish/Balaji/Documents/code/RSL/gumbel/models/exp7/134.pth'
+    model_path = '/home/fish/Balaji/Documents/code/RSL/gumbel/models/exp8/148.pth'
     print('model_path: ',model_path)
     network.load_state_dict(torch.load(model_path))
     network.eval()
+    total_mse = 0
 
-    for i in range(num_images):
+    for i in range(num_samples):
 
         data, label = get_input_label()
         #data = data.unsqueeze(0)
@@ -140,19 +141,24 @@ def test_model(num_images=1):
         # for param in network.parameters():
         #     print(param.name, param.data, param.data.shape, torch.mean(param.data))
 
-        
-        print('******* ',i,' ******')
-        print('data: ',data)
-        print('label: ',label)
-        print('pred: ',pred)
-        print('mse: ',mse)
-        
-        print('diff ids: ',np.where(diff > 0))
-        print('data ids: ',data[np.where(diff > 0)])
-        print('label ids: ',label[np.where(diff > 0)])
-        print('pred ids: ',pred[np.where(diff > 0)])
-        
-        print('*******  ******')
+        if debug:
+            print('******* ',i,' ******')
+            print('data: ',data)
+            print('label: ',label)
+            print('pred: ',pred)
+            print('mse: ',mse)
+            
+            print('diff ids: ',np.where(diff > 0))
+            print('data ids: ',data[np.where(diff > 0)])
+            print('label ids: ',label[np.where(diff > 0)])
+            print('pred ids: ',pred[np.where(diff > 0)])
+            
+            print('*******  ******')
+
+        total_mse += mse
+    
+    avg_mse = round(total_mse/num_samples, 10)
+    print('Avg mse: ',avg_mse,' num samples ',num_samples)
 
 if __name__ == "__main__":
 
@@ -171,8 +177,8 @@ if __name__ == "__main__":
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    print('Training ..')
-    train()
+    # print('Training ..')
+    # train()
 
     print('Testing ..')
     test_model()
