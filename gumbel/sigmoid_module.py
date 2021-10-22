@@ -19,7 +19,7 @@ class HardSoftmax(torch.autograd.Function):
 class Sigmoid(torch.nn.Module):
     def __init__(self):
         """
-        Implementation of oftmax for a binary case using sigmoid.
+        Implementation of softmax for a binary case using sigmoid.
         """
         super(Sigmoid, self).__init__()
         self.sigmoid = nn.Sigmoid()
