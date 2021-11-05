@@ -26,7 +26,7 @@ def get_data_loader():
 def get_network():
 
     in_channels = 2*N+1 
-    network = gates.GumbelGate(in_channels)
+    network = gates.Binarization(in_channels)
     return network
 
 def train():
@@ -77,7 +77,7 @@ def train():
         loss_bce_np = np.mean(np.asarray(BCE_loss))
 
         train_mins = (time.time() - start) / 60 # 1 epoch training 
-        print('epoch:', epoch, 'time: ', round(train_mins, 3), 'mins mse loss: ', round(loss_mse_np, 3), ' bce loss: ',round(loss_bce_np, 3))
+        print('epoch:', epoch, 'time: ', round(train_mins, 3), 'mins mse loss: ', round(loss_mse_np, 5), ' bce loss: ',round(loss_bce_np, 5))
         scheduler.step()
 
         if epoch % 2 == 0:
@@ -86,7 +86,7 @@ def train():
 def get_input_label():
 
     npole = 2*N+1
-    nonzero_frac = random.uniform(0.01, 0.05)
+    nonzero_frac = random.uniform(0.30, 0.60)
     ids = [i for i in range(npole)]
 
     for i in range(5):
@@ -95,9 +95,14 @@ def get_input_label():
     num_nonzeros = int(nonzero_frac * npole)
     non_zero_ids = ids[:num_nonzeros]
 
-    min_pert, max_pert = -1000, 1000
-    non_zero_values = torch.randint(min_pert, max_pert, (len(non_zero_ids),), dtype=torch.float32) + torch.randn((len(non_zero_ids),), dtype=torch.float32)
+    min_pert, max_pert = 0.3, 0.5
+    non_zero_values_p = non_zero_values = (max_pert - min_pert) * torch.rand((len(non_zero_ids) - len(non_zero_ids)//2,)) + min_pert
+
+    min_pert, max_pert = -0.5, -0.3
+    non_zero_values_n = non_zero_values = (max_pert - min_pert) * torch.rand((len(non_zero_ids)//2,)) + min_pert
     #non_zero_values = torch.randn((len(non_zero_ids)))
+
+    non_zero_values = torch.cat((non_zero_values_p, non_zero_values_n))
 
     ##co
     min_pert, max_pert = -1e-2, 1e-2
@@ -117,7 +122,7 @@ def test_model(num_samples=1, debug=1):
 
     network = get_network()
 
-    model_path = '/home/fish/Balaji/Documents/code/RSL/gumbel/models/exp8/148.pth'
+    model_path = '/home/balaji/Documents/code/RSL/gumbel/models/exp10/148.pth'
     print('model_path: ',model_path)
     network.load_state_dict(torch.load(model_path))
     network.eval()
@@ -126,6 +131,9 @@ def test_model(num_samples=1, debug=1):
     for i in range(num_samples):
 
         data, label = get_input_label()
+
+        print('data ',data.shape)
+        print('label ',label.shape)
         #data = data.unsqueeze(0)
         pred = network(data).detach().numpy()
 
@@ -163,16 +171,16 @@ def test_model(num_samples=1, debug=1):
 if __name__ == "__main__":
 
     N = 80
-    gpu_id = 1
+    gpu_id = 0
     lr = 1e-2
     lr_steps = [30, 60, 90, 120]
     lr_drop = 0.1
     num_epochs = 150
-    num_samples = 500000
-    model_root = '/home/fish/Balaji/Documents/code/RSL/gumbel/models/'
-    save_dir = model_root + '/exp8/'
+    num_samples = 30000
+    model_root = '/home/balaji/Documents/code/RSL/gumbel/models/'
+    save_dir = model_root + '/exp10/'
     batch_size = 32
-    num_workers = 24
+    num_workers = 8
 
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)

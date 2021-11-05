@@ -36,9 +36,9 @@ class Binarization(nn.Module):
 
     def forward(self, gate_inp: torch.Tensor) -> torch.Tensor:
         """Gumbel gates, Eq (8)"""
-            
-        gate_inp = gate_inp/1000
+
+        #gate_inp = gate_inp/1000
         gate_inp = torch.pow(gate_inp, 2)
         pi_log = self.gate_network(gate_inp)
-
+    
         return self.gs(pi_log, force_hard=True)
