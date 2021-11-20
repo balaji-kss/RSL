@@ -1,11 +1,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import scipy.io
 
 def load_npy(fpath):
 
     skeletons = np.load(fpath, allow_pickle=True, encoding='latin1').item()
 
     return skeletons['skel_body0']
+
+def load_body_model(path):
+
+    mat = scipy.io.loadmat(path, simplify_cells=True)
+    
+    return mat
 
 def rotation_matrix_from_vectors(vec1, vec2):
 
@@ -16,23 +23,74 @@ def rotation_matrix_from_vectors(vec1, vec2):
     """
     a, b = (vec1 / np.linalg.norm(vec1)).reshape(3), (vec2 / np.linalg.norm(vec2)).reshape(3)
     v = np.cross(a, b)
-    c = np.dot(a, b)
-    s = np.linalg.norm(v)
-    kmat = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
-    rotation_matrix = np.eye(3) + kmat + kmat.dot(kmat) * ((1 - c) / (s ** 2))
+    if any(v): #if not all zeros then 
+        c = np.dot(a, b)
+        s = np.linalg.norm(v)
+        kmat = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+        return np.eye(3) + kmat + kmat.dot(kmat) * ((1 - c) / (s ** 2))
 
-    return rotation_matrix
+    else:
+        return np.eye(3) 
+
+def scale_invariant(skeleton, body_model):
+
+    scale_skeleton = np.copy(skeleton).T
+    scale_skeleton[[2,1], :] = scale_skeleton[[1,2], :]
+    print('scale_skeleton 1 ',scale_skeleton)
+
+    bone1_joints = body_model["primary_pairs"][:, 0:2]
+    bone2_joints = body_model["primary_pairs"][:, 2:4]
+    
+    print('bone1_joints ',bone1_joints)
+    print('bone2_joints ',bone2_joints)
+
+    rot_mats = compute_relative_joint_angles(scale_skeleton, bone1_joints, bone2_joints)    
+    print('rot_mats ',rot_mats)
+
+    body_model_dic = {"n_joints": scale_skeleton, "bone1_joints": bone1_joints, "bone2_joints": bone2_joints}
+
+    scipy.io.savemat("test_relative_joint.mat", body_model_dic)
+
+    scale_skeleton[[2,1], :] = scale_skeleton[[1,2], :]
+
+    return scale_skeleton.T
+
+def compute_relative_joint_angles(norm_skeleton, bone1_joints, bone2_joints):
+
+    num_angles = bone1_joints.shape[0]
+    global_pt = np.array([1, 0, 0])
+    rot_mats = []
+
+    for i in range(num_angles):
+
+        if bone1_joints[i, 1]:
+            bone1_global = norm_skeleton[:, bone1_joints[i, 1]-1] - norm_skeleton[:, bone1_joints[i, 0]-1]
+        else:
+            bone1_global = global_pt.T - norm_skeleton[:, bone1_joints[i, 0]-1]
+
+        bone2_global = norm_skeleton[:, bone2_joints[i, 1]-1] - norm_skeleton[:, bone2_joints[i, 0]-1]
+        
+        rot_mat1 = rotation_matrix_from_vectors(bone1_global, global_pt)
+
+        print('bone1_global ',bone1_global)
+        print('bone2_global ',bone2_global)
+        rot_bone1_global = rot_mat1.dot(bone1_global)
+        rot_bone2_global = rot_mat1.dot(bone2_global)
+
+        rot_mat = rotation_matrix_from_vectors(rot_bone1_global, rot_bone2_global)
+        rot_mats.append(rot_mat)
+
+    return rot_mats
 
 def normalize(skeleton):
 
-    normalize_skeleton = np.copy(skeleton)[:, :2]
-
-    ones = np.ones((normalize_skeleton.shape[0], 1))
-    normalize_skeleton = np.concatenate((normalize_skeleton, ones), axis=1)
+    normalize_skeleton = np.copy(skeleton)
     
     #make hip center
     hip_coord = normalize_skeleton[0, :]
-    normalize_skeleton[:, ] -= normalize_skeleton[0, :]
+    normalize_skeleton[:, :] -= normalize_skeleton[0, :]
+
+    normalize_skeleton = scale_invariant(normalize_skeleton, body_model)
 
     left_hip  = normalize_skeleton[16, :]
     right_hip = normalize_skeleton[12, :]
@@ -43,8 +101,6 @@ def normalize(skeleton):
 
     mat = rotation_matrix_from_vectors(vec1, vec2)
     normalize_skeleton = mat.dot(normalize_skeleton.T).T
-
-    normalize_skeleton = np.concatenate((normalize_skeleton, skeleton[:,2].reshape((-1, 1))), axis=1)
 
     return normalize_skeleton
 
@@ -60,22 +116,27 @@ def plot_axis(skeleton, rangex, rangey, frame_num):
     plt.ylim(ymin, ymax)
     plt.text(xmax-0.5, ymax-0.1,'frame: {}'.format(frame_num))
 
-def vis_skel(skeletons):
+def vis_skel(skeletons, body_model):
 
     num_frames = skeletons.shape[0]
+    # plt.ion()
 
     for frame_num in range(num_frames):
-
-        plt.cla()
+        
+        # plt.cla()
         skeleton = skeletons[frame_num]
         
         ##input
         plot_skeleton(skeleton, frame_num, 0)
-
+        
         norm_skeleton = normalize(skeleton)
         plot_skeleton(norm_skeleton, frame_num, 1)
 
+        #plt.pause(0.001)
         plt.show()
+
+    # plt.ioff()
+    # plt.show()
 
 def plot_skeleton(skeleton, frame_num, plot_num):
 
@@ -105,6 +166,8 @@ def draw_skeleton(skeleton_org):
 if __name__ == "__main__":
 
     fpath = 'S013C001P037R002A003.skeleton.npy'#'S027C001P082R001A120.skeleton.npy'
+    mpath = 'body_model_mat.mat'
 
+    body_model = load_body_model(mpath)
     skeletons = load_npy(fpath)
-    vis_skel(skeletons)
+    vis_skel(skeletons, body_model)
