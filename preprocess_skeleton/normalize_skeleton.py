@@ -48,6 +48,9 @@ def calculate_bone_lengths(skeleton, body_model):
 def scale_invariant(skeleton, body_model):
 
     scale_skeleton = np.copy(skeleton).T
+    
+    print('input skeleton ')
+    calculate_bone_lengths(scale_skeleton, body_model)
 
     scale_skeleton[[2,1], :] = scale_skeleton[[1,2], :]  ## swap y and z
 
@@ -59,7 +62,13 @@ def scale_invariant(skeleton, body_model):
 
     scale_skeleton = reconstruct_joint_locations(rot_mats, bone1_joints, bone2_joints, bone_lengths)
 
+    if scale_skeleton.shape[0] == 0:
+        return
+
     scale_skeleton[[2,1], :] = scale_skeleton[[1,2], :]  ## swap y and z again
+
+    print('output skeleton ')
+    calculate_bone_lengths(scale_skeleton, body_model)
 
     return scale_skeleton.T
 
@@ -119,24 +128,27 @@ def reconstruct_joint_locations(rot_mats, bone1_joints, bone2_joints, bone_lengt
 def normalize(skeleton):
 
     normalize_skeleton = np.copy(skeleton)
-    
+
     #make hip center
     hip_coord = normalize_skeleton[0, :]
     normalize_skeleton[:, :] -= normalize_skeleton[0, :]
 
-    normalize_skeleton = scale_invariant(normalize_skeleton, body_model)
+    scale_skeleton = scale_invariant(normalize_skeleton, body_model)
 
-    left_hip  = normalize_skeleton[16, :]
-    right_hip = normalize_skeleton[12, :]
+    if scale_skeleton is None:
+        return normalize_skeleton
+
+    left_hip  = scale_skeleton[16, :]
+    right_hip = scale_skeleton[12, :]
     hip_axis = left_hip - right_hip
 
     vec1 = [hip_axis[0], hip_axis[1], 0]
     vec2 = [1, 0, 0]
 
     mat = rotation_matrix_from_vectors(vec1, vec2)
-    normalize_skeleton = mat.dot(normalize_skeleton.T).T
+    rot_skeleton = mat.dot(scale_skeleton.T).T
 
-    return normalize_skeleton
+    return rot_skeleton
 
 def plot_axis(skeleton, rangex, rangey, frame_num, name):
 
@@ -164,15 +176,16 @@ def preprocess_skeletons(skeletons_dict, body_model):
         
         # plt.cla()
         skeleton = skeletons[frame_num]
-        
+    
         ##input
         plot_skeleton(skeleton, frame_num, 0, 'input skeleton')
         
         norm_skeleton = normalize(skeleton)
+
         norm_skeletons[frame_num] = norm_skeleton
 
         plot_skeleton(norm_skeleton, frame_num, 1, 'output skeleton')
-        #plt.show()
+        plt.show()
 
     out_skeletons_dict['skel_body0'] = norm_skeletons
 
@@ -195,8 +208,9 @@ def preprocess_skeletons_dir(inp_dir, save_dir, body_model):
 
 def check_preprocess_npys(inp_dir, save_dir):
 
-    for inp_name, save_name in zip(os.listdir(inp_dir), os.listdir(save_dir)):
-
+    for inp_name in os.listdir(inp_dir):
+        
+        save_name = inp_name
         print(inp_name, save_name)
         inp_npy_fpath = os.path.join(inp_dir, inp_name)
         inp_skeletons_dict = load_npy(inp_npy_fpath)
