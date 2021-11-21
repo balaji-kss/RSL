@@ -23,6 +23,7 @@ def rotation_matrix_from_vectors(vec1, vec2):
     """
     a, b = (vec1 / np.linalg.norm(vec1)).reshape(3), (vec2 / np.linalg.norm(vec2)).reshape(3)
     v = np.cross(a, b)
+    
     if any(v): #if not all zeros then 
         c = np.dot(a, b)
         s = np.linalg.norm(v)
@@ -32,26 +33,42 @@ def rotation_matrix_from_vectors(vec1, vec2):
     else:
         return np.eye(3) 
 
+def calculate_bone_lengths(skeleton, body_model):
+
+    bone_pairs = body_model["primary_pairs"][:, 2:4]
+
+    for bone_pair in bone_pairs:
+        idx1, idx2 = bone_pair
+        p1 = skeleton[:, idx1-1]
+        p2 = skeleton[:, idx2-1]
+        len = np.linalg.norm(p1-p2)
+        print(idx1, idx2, np.round(len, 3))
+
 def scale_invariant(skeleton, body_model):
 
     scale_skeleton = np.copy(skeleton).T
+
+    print('input length')
+    calculate_bone_lengths(scale_skeleton, body_model)
+
     scale_skeleton[[2,1], :] = scale_skeleton[[1,2], :]
-    print('scale_skeleton 1 ',scale_skeleton)
 
     bone1_joints = body_model["primary_pairs"][:, 0:2]
     bone2_joints = body_model["primary_pairs"][:, 2:4]
-    
-    print('bone1_joints ',bone1_joints)
-    print('bone2_joints ',bone2_joints)
+    bone_lengths = body_model["bone_lengths"]
 
     rot_mats = compute_relative_joint_angles(scale_skeleton, bone1_joints, bone2_joints)    
-    print('rot_mats ',rot_mats)
 
-    body_model_dic = {"n_joints": scale_skeleton, "bone1_joints": bone1_joints, "bone2_joints": bone2_joints}
+    body_model_dic = {"scale_skeleton": scale_skeleton, "bone1_joints": bone1_joints, "bone2_joints": bone2_joints, "bone_lengths": bone_lengths, "rot_mat": rot_mats}
 
-    scipy.io.savemat("test_relative_joint.mat", body_model_dic)
+    scipy.io.savemat("test_reconstruct.mat", body_model_dic)
+
+    scale_skeleton = reconstruct_joint_locations(rot_mats, bone1_joints, bone2_joints, bone_lengths)
 
     scale_skeleton[[2,1], :] = scale_skeleton[[1,2], :]
+    
+    print('output length')
+    calculate_bone_lengths(scale_skeleton, body_model)
 
     return scale_skeleton.T
 
@@ -70,17 +87,43 @@ def compute_relative_joint_angles(norm_skeleton, bone1_joints, bone2_joints):
 
         bone2_global = norm_skeleton[:, bone2_joints[i, 1]-1] - norm_skeleton[:, bone2_joints[i, 0]-1]
         
-        rot_mat1 = rotation_matrix_from_vectors(bone1_global, global_pt)
+        if np.sum(bone1_global) == 0 or np.sum(bone2_global) == 0:
+            rot_mat = []
+            rot_mats.append(rot_mat)
 
-        print('bone1_global ',bone1_global)
-        print('bone2_global ',bone2_global)
-        rot_bone1_global = rot_mat1.dot(bone1_global)
-        rot_bone2_global = rot_mat1.dot(bone2_global)
+        else:
+            rot_mat1 = rotation_matrix_from_vectors(bone1_global, global_pt)
+            
+            rot_bone1_global = rot_mat1.dot(bone1_global)
+            rot_bone2_global = rot_mat1.dot(bone2_global)
 
-        rot_mat = rotation_matrix_from_vectors(rot_bone1_global, rot_bone2_global)
-        rot_mats.append(rot_mat)
+            rot_mat = rotation_matrix_from_vectors(rot_bone1_global, rot_bone2_global)
+            rot_mats.append(rot_mat)
 
     return rot_mats
+
+def reconstruct_joint_locations(rot_mats, bone1_joints, bone2_joints, bone_lengths):
+
+    num_angles = bone1_joints.shape[0]
+    global_pt = np.array([1, 0, 0])
+
+    for i in range(num_angles):
+        if len(rot_mats[i]) == 0:
+            return np.array([])
+
+    num_joints = num_angles + 1
+    joint_locations = np.zeros((3, num_joints), dtype='float')
+    joint_locations[:, bone1_joints[0, 0]-1] = [0, 0, 0]
+    joint_locations[:, bone2_joints[0, 1]-1] = bone_lengths[0] * rot_mats[0].dot(global_pt.T)
+
+    for i in range(1, num_angles):
+        bone1_global = joint_locations[:, bone1_joints[i, 1]-1] - joint_locations[:, bone1_joints[i, 0]-1]
+        rot_mat = rotation_matrix_from_vectors(global_pt, bone1_global)
+        mat = np.matmul(rot_mat, rot_mats[i])
+        bone2_global = mat.dot(global_pt.T)
+        joint_locations[:, bone2_joints[i,1]-1] = bone_lengths[i]*bone2_global + joint_locations[:, bone2_joints[i,0]-1]
+
+    return joint_locations
 
 def normalize(skeleton):
 
