@@ -1,3 +1,4 @@
+import os, sys
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy.io
@@ -6,7 +7,7 @@ def load_npy(fpath):
 
     skeletons = np.load(fpath, allow_pickle=True, encoding='latin1').item()
 
-    return skeletons['skel_body0']
+    return skeletons
 
 def load_body_model(path):
 
@@ -48,10 +49,7 @@ def scale_invariant(skeleton, body_model):
 
     scale_skeleton = np.copy(skeleton).T
 
-    print('input length')
-    calculate_bone_lengths(scale_skeleton, body_model)
-
-    scale_skeleton[[2,1], :] = scale_skeleton[[1,2], :]
+    scale_skeleton[[2,1], :] = scale_skeleton[[1,2], :]  ## swap y and z
 
     bone1_joints = body_model["primary_pairs"][:, 0:2]
     bone2_joints = body_model["primary_pairs"][:, 2:4]
@@ -59,16 +57,9 @@ def scale_invariant(skeleton, body_model):
 
     rot_mats = compute_relative_joint_angles(scale_skeleton, bone1_joints, bone2_joints)    
 
-    body_model_dic = {"scale_skeleton": scale_skeleton, "bone1_joints": bone1_joints, "bone2_joints": bone2_joints, "bone_lengths": bone_lengths, "rot_mat": rot_mats}
-
-    scipy.io.savemat("test_reconstruct.mat", body_model_dic)
-
     scale_skeleton = reconstruct_joint_locations(rot_mats, bone1_joints, bone2_joints, bone_lengths)
 
-    scale_skeleton[[2,1], :] = scale_skeleton[[1,2], :]
-    
-    print('output length')
-    calculate_bone_lengths(scale_skeleton, body_model)
+    scale_skeleton[[2,1], :] = scale_skeleton[[1,2], :]  ## swap y and z again
 
     return scale_skeleton.T
 
@@ -147,7 +138,7 @@ def normalize(skeleton):
 
     return normalize_skeleton
 
-def plot_axis(skeleton, rangex, rangey, frame_num):
+def plot_axis(skeleton, rangex, rangey, frame_num, name):
 
     xmin, xmax = rangex
     ymin, ymax = rangey
@@ -155,14 +146,19 @@ def plot_axis(skeleton, rangex, rangey, frame_num):
     plt.scatter(skeleton[:, 0], skeleton[:, 1], s=5)
     plt.xlabel('X Label')
     plt.ylabel('Y Label')
+    plt.title(name)
     plt.xlim(xmin, xmax)
     plt.ylim(ymin, ymax)
     plt.text(xmax-0.5, ymax-0.1,'frame: {}'.format(frame_num))
 
-def vis_skel(skeletons, body_model):
+def preprocess_skeletons(skeletons_dict, body_model):
 
+    out_skeletons_dict = skeletons_dict.copy()
+    skeletons = skeletons_dict['skel_body0']
+    
     num_frames = skeletons.shape[0]
-    # plt.ion()
+    
+    norm_skeletons = np.zeros(skeletons.shape, dtype='float')
 
     for frame_num in range(num_frames):
         
@@ -170,25 +166,65 @@ def vis_skel(skeletons, body_model):
         skeleton = skeletons[frame_num]
         
         ##input
-        plot_skeleton(skeleton, frame_num, 0)
+        plot_skeleton(skeleton, frame_num, 0, 'input skeleton')
         
         norm_skeleton = normalize(skeleton)
-        plot_skeleton(norm_skeleton, frame_num, 1)
+        norm_skeletons[frame_num] = norm_skeleton
 
-        #plt.pause(0.001)
-        plt.show()
+        plot_skeleton(norm_skeleton, frame_num, 1, 'output skeleton')
+        #plt.show()
 
-    # plt.ioff()
-    # plt.show()
+    out_skeletons_dict['skel_body0'] = norm_skeletons
 
-def plot_skeleton(skeleton, frame_num, plot_num):
+    return out_skeletons_dict
+
+def preprocess_skeletons_dir(inp_dir, save_dir, body_model):
+
+    for fname in os.listdir(inp_dir):
+
+        npy_fpath = os.path.join(inp_dir, fname)
+        save_npy_fpath = os.path.join(save_dir, fname)
+
+        print('input path: ',npy_fpath)
+        print('save path: ',save_npy_fpath)
+
+        skeletons_dict = load_npy(npy_fpath)
+        preprocess_skeletons_dict = preprocess_skeletons(skeletons_dict, body_model)
+        
+        np.save(save_npy_fpath, preprocess_skeletons_dict)
+
+def check_preprocess_npys(inp_dir, save_dir):
+
+    for inp_name, save_name in zip(os.listdir(inp_dir), os.listdir(save_dir)):
+
+        print(inp_name, save_name)
+        inp_npy_fpath = os.path.join(inp_dir, inp_name)
+        inp_skeletons_dict = load_npy(inp_npy_fpath)
+        inp_skeletons = inp_skeletons_dict['skel_body0']
+        num_frames = inp_skeletons.shape[0]
+
+        save_npy_fpath = os.path.join(save_dir, save_name)
+        save_skeletons_dict = load_npy(save_npy_fpath)
+        save_skeletons = save_skeletons_dict['skel_body0']
+
+        for frame_num in range(0, num_frames, 10):
+
+            inp_skeleton = inp_skeletons[frame_num]            
+            plot_skeleton(inp_skeleton, frame_num, 0, 'input skeleton')
+
+            save_skeleton = save_skeletons[frame_num]            
+            plot_skeleton(save_skeleton, frame_num, 1, 'save skeleton')
+
+            plt.show()
+
+def plot_skeleton(skeleton, frame_num, plot_num, name):
 
     xmin, xmax = np.min(skeleton[:, 0]) - 0.5, np.max(skeleton[:, 0]) + 0.5  
     ymin, ymax = np.min(skeleton[:, 1]) - 0.3, np.max(skeleton[:, 1]) + 0.3
 
     plt.figure(plot_num)
     draw_skeleton(skeleton)
-    plot_axis(skeleton, [xmin, xmax], [ymin, ymax], frame_num)
+    plot_axis(skeleton, [xmin, xmax], [ymin, ymax], frame_num, name)
 
 def draw_skeleton(skeleton_org):
 
@@ -209,8 +245,14 @@ def draw_skeleton(skeleton_org):
 if __name__ == "__main__":
 
     fpath = 'S013C001P037R002A003.skeleton.npy'#'S027C001P082R001A120.skeleton.npy'
-    mpath = 'body_model_mat.mat'
-
+    mpath = 'body_params.mat'
     body_model = load_body_model(mpath)
-    skeletons = load_npy(fpath)
-    vis_skel(skeletons, body_model)
+
+    dir = '/home/ubuntu/Documents/US/NEU/RA/skeletal_action_recognition_code/data/npys/'
+    save_dir = '/home/ubuntu/Documents/US/NEU/RA/skeletal_action_recognition_code/data/preprocess_npys/'
+
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
+    preprocess_skeletons_dir(dir, save_dir, body_model)
+    check_preprocess_npys(dir, save_dir)
