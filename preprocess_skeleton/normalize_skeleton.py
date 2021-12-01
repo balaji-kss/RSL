@@ -5,8 +5,9 @@ import scipy.io
 
 def load_npy(fpath):
 
-    skeletons = np.load(fpath, allow_pickle=True, encoding='latin1').item()
-
+    #skeletons = np.load(fpath, allow_pickle=True, encoding='latin1').item()
+    skeletons = np.load(fpath, allow_pickle=True)
+    
     return skeletons
 
 def load_body_model(path):
@@ -262,8 +263,8 @@ if __name__ == "__main__":
     mpath = 'body_params.mat'
     body_model = load_body_model(mpath)
 
-    dir = '/home/ubuntu/Documents/US/NEU/RA/skeletal_action_recognition_code/data/npys/'
-    save_dir = '/home/ubuntu/Documents/US/NEU/RA/skeletal_action_recognition_code/data/preprocess_npys/'
+    dir = '/home/ubuntu/Documents/US/NEU/RA/RSL/preprocess_skeleton/npys/'
+    save_dir = '/home/ubuntu/Documents/US/NEU/RA/RSL/preprocess_skeleton/preprocess_npys/'
 
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
