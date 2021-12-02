@@ -49,8 +49,8 @@ def scale_invariant(skeleton, body_model):
 
     scale_skeleton = np.copy(skeleton).T
     
-    print('input skeleton ')
-    calculate_bone_lengths(scale_skeleton, body_model)
+    # print('input skeleton ')
+    # calculate_bone_lengths(scale_skeleton, body_model)
 
     scale_skeleton[[2,1], :] = scale_skeleton[[1,2], :]  ## swap y and z
 
@@ -67,8 +67,8 @@ def scale_invariant(skeleton, body_model):
 
     scale_skeleton[[2,1], :] = scale_skeleton[[1,2], :]  ## swap y and z again
 
-    print('output skeleton ')
-    calculate_bone_lengths(scale_skeleton, body_model)
+    # print('output skeleton ')
+    # calculate_bone_lengths(scale_skeleton, body_model)
 
     return scale_skeleton.T
 
@@ -178,16 +178,16 @@ def preprocess_skeletons(skeletons_dict, body_model):
         skeleton = skeletons[frame_num]
     
         ##input
-        plot_skeleton(skeleton, frame_num, 0, 'input skeleton')
+        # plot_skeleton(skeleton, frame_num, 0, 'input skeleton')
         
-        # norm_skeleton = normalize(skeleton)
+        norm_skeleton = normalize(skeleton)
 
-        # norm_skeletons[frame_num] = norm_skeleton
+        norm_skeletons[frame_num] = norm_skeleton
 
         # plot_skeleton(norm_skeleton, frame_num, 1, 'output skeleton')
-        plt.show()
+        # plt.show()
 
-    out_skeletons_dict['skel_body0'] = norm_skeletons
+    out_skeletons_dict = norm_skeletons
 
     return out_skeletons_dict
 
@@ -214,12 +214,12 @@ def check_preprocess_npys(inp_dir, save_dir):
         print(inp_name, save_name)
         inp_npy_fpath = os.path.join(inp_dir, inp_name)
         inp_skeletons_dict = load_npy(inp_npy_fpath)
-        inp_skeletons = inp_skeletons_dict['skel_body0']
+        inp_skeletons = inp_skeletons_dict
         num_frames = inp_skeletons.shape[0]
 
         save_npy_fpath = os.path.join(save_dir, save_name)
         save_skeletons_dict = load_npy(save_npy_fpath)
-        save_skeletons = save_skeletons_dict['skel_body0']
+        save_skeletons = save_skeletons_dict
 
         for frame_num in range(0, num_frames, 10):
 
@@ -233,7 +233,6 @@ def check_preprocess_npys(inp_dir, save_dir):
 
 def plot_skeleton(skeleton, frame_num, plot_num, name):
 
-    print('skeleton shape: ',skeleton.shape)
     xmin, xmax = np.min(skeleton[:, 0]) - 0.5, np.max(skeleton[:, 0]) + 0.5  
     ymin, ymax = np.min(skeleton[:, 1]) - 0.3, np.max(skeleton[:, 1]) + 0.3
 
@@ -283,7 +282,7 @@ def draw_skeleton0(skeleton_org):
 if __name__ == "__main__":
 
     fpath = 'S013C001P037R002A003.skeleton.npy'#'S027C001P082R001A120.skeleton.npy'
-    mpath = 'body_params.mat'
+    mpath = 'body_params_nucla.mat'
     body_model = load_body_model(mpath)
 
     dir = '/home/ubuntu/Documents/US/NEU/RA/RSL/preprocess_skeleton/npys/'
