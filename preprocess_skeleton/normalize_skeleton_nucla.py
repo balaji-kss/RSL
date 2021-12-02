@@ -5,7 +5,6 @@ import scipy.io
 
 def load_npy(fpath):
 
-    #skeletons = np.load(fpath, allow_pickle=True, encoding='latin1').item()
     skeletons = np.load(fpath, allow_pickle=True)
     
     return skeletons
@@ -167,7 +166,7 @@ def plot_axis(skeleton, rangex, rangey, frame_num, name):
 def preprocess_skeletons(skeletons_dict, body_model):
 
     out_skeletons_dict = skeletons_dict.copy()
-    skeletons = skeletons_dict['skel_body0']
+    skeletons = skeletons_dict
     
     num_frames = skeletons.shape[0]
     
@@ -181,11 +180,11 @@ def preprocess_skeletons(skeletons_dict, body_model):
         ##input
         plot_skeleton(skeleton, frame_num, 0, 'input skeleton')
         
-        norm_skeleton = normalize(skeleton)
+        # norm_skeleton = normalize(skeleton)
 
-        norm_skeletons[frame_num] = norm_skeleton
+        # norm_skeletons[frame_num] = norm_skeleton
 
-        plot_skeleton(norm_skeleton, frame_num, 1, 'output skeleton')
+        # plot_skeleton(norm_skeleton, frame_num, 1, 'output skeleton')
         plt.show()
 
     out_skeletons_dict['skel_body0'] = norm_skeletons
@@ -234,6 +233,7 @@ def check_preprocess_npys(inp_dir, save_dir):
 
 def plot_skeleton(skeleton, frame_num, plot_num, name):
 
+    print('skeleton shape: ',skeleton.shape)
     xmin, xmax = np.min(skeleton[:, 0]) - 0.5, np.max(skeleton[:, 0]) + 0.5  
     ymin, ymax = np.min(skeleton[:, 1]) - 0.3, np.max(skeleton[:, 1]) + 0.3
 
@@ -241,7 +241,30 @@ def plot_skeleton(skeleton, frame_num, plot_num, name):
     draw_skeleton(skeleton)
     plot_axis(skeleton, [xmin, xmax], [ymin, ymax], frame_num, name)
 
+
 def draw_skeleton(skeleton_org):
+
+    idxs1 = [20, 1, 2, 1, 8, 10, 2, 9, 11, 3, 4, 7, 7, 5, 6, 14, 15, 16, 17]
+    idxs2 =  [3, 3, 3, 8, 10, 12, 9, 11, 13, 4, 7, 5, 6, 14, 15, 16, 17, 18, 19]
+    idxs = np.array([idxs1, idxs2]).T - 1
+
+    skeleton = np.copy(skeleton_org).T
+    
+    plt.scatter(skeleton[0], skeleton[1])
+
+    for i in range(skeleton.shape[1]):
+        plt.annotate(i, (skeleton[0, i], skeleton[1, i]))
+
+    arms = np.array([8,7,6,5,3,9,10,11,12])-1 #Arms
+    legs = np.array([16,15,14,13,1,17,18,19,20]) - 1 #leg
+    body = np.array([4,3,2,1]) - 1  #body
+    color_bone = 'red'
+
+    plt.plot(skeleton[0, arms], skeleton[1, arms], c=color_bone, lw=2.0) 
+    plt.plot(skeleton[0, legs], skeleton[1, legs], c=color_bone, lw=2.0)
+    plt.plot(skeleton[0, body], skeleton[1, body], c=color_bone, lw=2.0)
+
+def draw_skeleton0(skeleton_org):
 
     skeleton = np.copy(skeleton_org).T
     arms= np.array([24,12,11,10,9,21,5,6,7,8,22])-1 #Arms

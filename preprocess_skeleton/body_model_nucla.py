@@ -1,8 +1,8 @@
 import numpy as np
 from scipy.io import savemat
 
-n_joints = 25
-n_bones = 24
+n_joints = 20
+n_bones = 19
 
 bones = [
         [1, 2],
@@ -103,4 +103,4 @@ body_model_dic = {"n_joints": n_joints, "n_bones": n_bones, "bones": bones, \
                 "joint_angle_pairs":joint_angle_pairs
                 }
 
-savemat("body_params.mat", body_model_dic)
+savemat("body_params_nucla.mat", body_model_dic)
