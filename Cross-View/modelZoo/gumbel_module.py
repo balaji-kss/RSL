@@ -53,16 +53,12 @@ class HardSoftmax(torch.autograd.Function):
     def forward(ctx, input):
         y_hard = input.clone()
         y_hard = y_hard.zero_()
-        a = torch.mean(input).data.item()
-        b = 1-a
-        if a < b:
-            y_hard[input > b] = 1
-            y_hard[input <= a] = 1
-        else:
-            y_hard[input > a] = 1
-            y_hard[input <= b] = 1
 
-        # y_hard[input >= 0.6] =1
+        means = torch.mean(input, 1, keepdim=True).repeat(1,input.shape[1],1)
+        y_hard[input>=means] = 1
+
+
+        # y_hard[input >= 0.5] =1
 
         return y_hard
 

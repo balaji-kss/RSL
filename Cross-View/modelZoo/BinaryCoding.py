@@ -6,9 +6,6 @@ from utils import *
 from modelZoo.actRGB import *
 from modelZoo.gumbel_module import *
 from scipy.spatial import distance
-from modelZoo.binarize import Binarization
-from modelZoo.transformer import TransformerEncoder, TransformerDecoder
-
 class GroupNorm(nn.Module):
     r"""Applies Group Normalization over a mini-batch of inputs as described in
     the paper `Group Normalization`_ .
@@ -144,82 +141,68 @@ class binarizeSparseCode(nn.Module):
         # temp = sparseCode*binaryCode
         return binaryCode, sparseCode, Dict
 
-class classificationHead(nn.Module):
-    def __init__(self, num_class, Npole,dataType):
-        super(classificationHead, self).__init__()
+class classificationGlobal(nn.Module):
+    def __init__(self, num_class, Npole, dataType):
+        super(classificationGlobal, self).__init__()
         self.num_class = num_class
         self.Npole = Npole
         self.dataType = dataType
+        self.conv1 = nn.Conv1d(self.Npole, 256, 1, stride=1, padding=0)
+        self.bn1 = nn.BatchNorm1d(num_features=256, eps=1e-05, affine=True)
 
-        self.conv1 = nn.Conv2d(self.Npole, 128, (3,3), padding=2)
-        self.bn1 = nn.BatchNorm2d(num_features=128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        self.gn1 = GroupNorm(128, 128)
+        self.conv2 = nn.Conv1d(256, 512, 1, stride=1, padding=0)
+        self.bn2 = nn.BatchNorm1d(num_features=512, eps=1e-5, affine=True)
 
-        self.conv2 = nn.Conv2d(128, 64, (1,1))
-        self.bn2 = nn.BatchNorm2d(num_features=64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        self.gn2 = GroupNorm(64, 64)
+        self.conv3 = nn.Conv1d(512, 1024, 3, stride=2, padding=1)
+        self.bn3 = nn.BatchNorm1d(num_features=1024, eps=1e-5, affine=True)
 
-        # self.conv3 = nn.Conv2d(64, 32, (1,1))
-        # self.bn3 = nn.BatchNorm2d(num_features=32, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        # self.gn3 = GroupNorm(32, 32)
-        self.conv3 = nn.Conv2d(64, 64, (1, 1))
-        self.bn3 = nn.BatchNorm2d(num_features=64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        self.gn3 = GroupNorm(64, 64)
+        self.pool = nn.AvgPool1d(kernel_size=(25))
 
-        self.conv4 = nn.Conv2d(64, 128, (1, 1))
-        self.bn4 = nn.BatchNorm2d(num_features=128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        self.gn4 = GroupNorm(128, 128)
+        self.conv4 = nn.Conv2d(self.Npole + 1024, 1024, (3, 1), stride=1, padding=(0, 1))
+        self.bn4 = nn.BatchNorm2d(num_features=1024, eps=1e-5, affine=True)
 
-        self.RL = nn.LeakyReLU()
-        # self.FC = nn.Linear(32*3*3, self.num_class)
-        # self.FC = nn.Linear(32*20*4, self.num_class) # joint = 18
-        # self.FC = nn.Linear(32*22*4, self.num_class) # joint = 20, 2D
-        if self.dataType == '2D':
-            self.FC = nn.Linear(128 * 27 * 4, self.num_class) # joint = 25, openpose
-            # self.FC = nn.Linear(128 * 27 * 4, self.num_class)
-            # self.FC = nn.Linear(128 * 17 *4, self.num_class)  # joing = 15, jhmdb
-        else:
-            # self.FC = nn.Linear(32 * 22 * 5, self.num_class) # joint=20, 3D
-            # self.FC = nn.Linear(128 * 22 * 5, self.num_class)
-            self.FC = nn.Linear(128 * 27 * 5, self.num_class)
+        self.conv5 = nn.Conv2d(1024, 512, (3, 1), stride=1, padding=(0, 1))
+        self.bn5 = nn.BatchNorm2d(num_features=512, eps=1e-5, affine=True)
+
+        self.conv6 = nn.Conv2d(512, 256, (3, 3), stride=2, padding=0)
+        self.bn6 = nn.BatchNorm2d(num_features=256, eps=1e-5, affine=True)
+
+        self.fc = nn.Linear(256*10*2, 1024)
+        self.fc2 = nn.Linear(1024, 512)
+        self.fc3 = nn.Linear(512, 128)
+        self.cls = nn.Linear(128, self.num_class)
+
+        self.relu = nn.LeakyReLU()
         for m in self.modules():
-            # if m.__class__ == nn.Conv2d or m.__class__ == nn.Linear:
-            #     init.xavier_normal(m.weight.data)
-            #     m.bias.data.fill_(0)
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
 
             elif isinstance(m, nn.Linear):
                 torch.nn.init.xavier_uniform_(m.weight, gain=1)
 
-    def forward(self, x):
-        x = self.conv1(x)
-        # x = self.bn1(x)
-        x = self.gn1(x)
-        x = self.RL(x)
 
-        x = self.conv2(x)
-        # x = self.bn2(x)
-        x = self.gn2(x)
-        x = self.RL(x)
+    def forward(self,x):
+        inp = x
+        bz = inp.shape[0]
+        x = self.relu(self.bn1(self.conv1(x)))
+        x = self.relu(self.bn2(self.conv2(x)))
+        x_gl = self.pool(self.relu(self.bn3(self.conv3(x))))
 
-        x = self.conv3(x)
-        # x = self.bn3(x)
-        x = self.gn3(x)
-        x = self.RL(x)
+        x_new = torch.cat((x_gl.repeat(1,1,inp.shape[-1]),inp),1).reshape(bz,1024+self.Npole,25,2)
 
-        x = self.conv4(x)
-        # x = self.bn4(x)
-        x = self.gn4(x)
-        x = self.RL(x)
+        x_out = self.relu(self.bn4(self.conv4(x_new)))
+        x_out = self.relu(self.bn5(self.conv5(x_out)))
+        x_out = self.relu(self.bn6(self.conv6(x_out)))
 
-        # print('binary classifier fc size:', x.shape)
-        x = x.view(x.size(0), -1)
-        # x = self.FC(x)
+        'MLP'
+        x_out = x_out.view(bz,-1)  #flatten
+        x_out = self.relu(self.fc(x_out))
+        x_out = self.relu(self.fc2(x_out))
+        x_out = self.relu(self.fc3(x_out))
 
-        label = self.FC(x)
-        return label
+        out = self.cls(x_out)
 
+        return out
 
 class classificationWBinarization(nn.Module):
     def __init__(self, num_class, Npole, num_binary, dataType):
@@ -229,7 +212,7 @@ class classificationWBinarization(nn.Module):
         self.num_binary = num_binary
         self.dataType = dataType
         self.BinaryCoding = binaryCoding(num_binary=self.num_binary)
-        self.Classifier = classificationHead(num_class=self.num_class, Npole=Npole,dataType=self.dataType)
+        self.Classifier = classificationGlobal(num_class=self.num_class, Npole=Npole,dataType=self.dataType)
 
     def forward(self, x):
         'x is coefficients'
@@ -251,200 +234,20 @@ class classificationWSparseCode(nn.Module):
         self.gpu_id = gpu_id
         self.dim = dim
         self.dataType = dataType
-        self.Classifier = classificationHead(num_class=self.num_class, Npole=Npole, dataType=self.dataType)
-        # self.sparsecoding = sparseCodingGenerator(self.Drr, self.Dtheta, self.PRE, self.gpu_id) # old-version
+        self.Classifier = classificationGlobal(num_class=self.num_class, Npole=Npole, dataType=self.dataType)
         self.fistaLam = fistaLam
         self.sparseCoding = DyanEncoder(self.Drr, self.Dtheta,lam=self.fistaLam, gpu_id=self.gpu_id)
+
+
     def forward(self, x, T):
-        # sparseCode, Dict = self.sparsecoding.forward2(x, T) # old-version
-        sparseCode, Dict,_ = self.sparseCoding(x, T)
-        Reconstruction = torch.matmul(Dict, sparseCode)   # sparseCode.detach()
-        c = sparseCode.reshape(1, self.Npole, int(x.shape[-1]/self.dim), self.dim)
-        label = self.Classifier(c)
+        sparseCode, Dict, Reconstruction  = self.sparseCoding.forward2(x, T) # w.o. RH
+        # sparseCode, Dict,_ = self.sparseCoding(x, T) #RH
+        # sparseCode = sparseCode.detach() #for debug
+
+        label = self.Classifier(sparseCode)
 
         return label, Reconstruction
 
-class Dyan_Autoencoder(nn.Module):
-    def __init__(self, Drr, Dtheta, dim, dataType, Inference, gpu_id, fistaLam):
-        super(Dyan_Autoencoder, self).__init__()
-
-        self.Drr = Drr
-        self.Dtheta = Dtheta
-        self.Inference = Inference
-        self.gpu_id = gpu_id
-        self.dim = dim
-        self.dataType = dataType
-        self.fistaLam = fistaLam
-
-        print('***** Dyan Autoencoder *****')
-
-        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=2048, num_heads=5, num_layers=8, dropout=0.1)
-
-        self.sparse_coding = DyanEncoder(self.Drr, self.Dtheta,  lam=fistaLam, gpu_id=self.gpu_id)
-        
-        self.transformer_decoder = TransformerDecoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=2048, num_heads=5, num_layers=8, dropout=0.1)
-
-    def get_tgt_mask(self, size) -> torch.tensor:
-
-        # Generates a square matrix where the each row allows one word more to be seen
-        mask = torch.tril(torch.ones(size, size) == 1) # Lower triangular matrix
-        mask = mask.float()
-        mask = mask.masked_fill(mask == 0, float('-inf')) # Convert zeros to -inf
-        mask = mask.masked_fill(mask == 1, float(0.0)) # Convert ones to 0
-        
-        # EX for size=5:
-        # [[0., -inf, -inf, -inf, -inf],
-        #  [0.,   0., -inf, -inf, -inf],
-        #  [0.,   0.,   0., -inf, -inf],
-        #  [0.,   0.,   0.,   0., -inf],
-        #  [0.,   0.,   0.,   0.,   0.]]
-        
-        return mask.repeat(5, 1, 1).cuda()
-
-    def forward(self, x, T):
-        
-        tenc_out = self.transformer_encoder(x)
-
-        sparse_code, Dict, _ = self.sparse_coding(tenc_out, T)
-
-        dyan_out = torch.matmul(Dict, sparse_code)
-
-        self.tgt_mask = self.get_tgt_mask(dyan_out.shape[1])
-
-        tdec_out = self.transformer_decoder(dyan_out, self.tgt_mask)
-
-        return tdec_out, dyan_out, tenc_out
-
-class Dyan_BC_Autoencoder(nn.Module):
-    def __init__(self, Drr, Dtheta, dim, dataType, Inference, gpu_id, fistaLam):
-        super(Dyan_BC_Autoencoder, self).__init__()
-
-        self.Drr = Drr
-        self.Dtheta = Dtheta
-        self.Inference = Inference
-        self.gpu_id = gpu_id
-        self.dim = dim
-        self.dataType = dataType
-        self.fistaLam = fistaLam
-
-        print('***** Dyan BC Autoencoder *****')
-
-        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=2048, num_heads=5, num_layers=8, dropout=0.1)
-
-        self.sparse_coding = DyanEncoder(self.Drr, self.Dtheta,  lam=fistaLam, gpu_id=self.gpu_id)
-        
-        print('***** gumbel *****')
-        self.binary_coding = GumbelSigmoid()
-
-        self.transformer_decoder = TransformerDecoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=2048, num_heads=5, num_layers=8, dropout=0.1)
-
-    def forward(self, x, T):
-        
-        tenc_out = self.transformer_encoder(x)
-
-        sparse_code, Dict, _ = self.sparse_coding(tenc_out, T)
-
-        binary_code = self.binary_coding(sparse_code**2, force_hard=True, temperature=0.1, inference=self.Inference)
-
-        sparse_binary = sparse_code * binary_code
-        dyan_out = torch.matmul(Dict, sparse_binary)
-
-        tdec_out = self.transformer_decoder(dyan_out)
-
-        return tdec_out, dyan_out, tenc_out, binary_code
-
-class DynamicStream_Transformer(nn.Module):
-    def __init__(self, num_class, Npole, num_binary, Drr, Dtheta, dim, dataType, Inference, gpu_id, fistaLam, gumbel=1):
-        super(DynamicStream_Transformer, self).__init__()
-        self.num_class = num_class
-        self.Npole = Npole
-        self.num_binary = num_binary
-        self.Drr = Drr
-        self.Dtheta = Dtheta
-        self.Inference = Inference
-        self.gpu_id = gpu_id
-        self.dim = dim
-        self.dataType = dataType
-        self.fistaLam = fistaLam
-        self.gumbel = gumbel
-        
-        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=2048, num_heads=5, num_layers=8, dropout=0.1)
-        self.sparseCoding = DyanEncoder(self.Drr, self.Dtheta,  lam=fistaLam, gpu_id=self.gpu_id)
-        print('Dynamic Stream')
-        
-        if self.gumbel:
-            print('gumbel')
-            self.BinaryCoding = GumbelSigmoid()
-        else:
-            self.BinaryCoding = Binarization(self.Npole)
-
-        self.Classifier = classificationHead(num_class=self.num_class, Npole=Npole, dataType=self.dataType)
-        
-    def forward(self, x, T):
-        
-        tenc_out = self.transformer_encoder(x)
-
-        sparseCode, Dict, _ = self.sparseCoding(tenc_out, T)
-
-        if self.gumbel:
-            'for GUMBEL'
-            binaryCode = self.BinaryCoding(sparseCode**2, force_hard=True, temperature=0.1, inference=self.Inference)
-        else:
-            'Learned Binary coding'
-            binaryCode = self.BinaryCoding(sparseCode)
-
-        sparse_binary = sparseCode * binaryCode
-        Reconstruction = torch.matmul(Dict, sparse_binary)
-
-        binary_reshape = binaryCode.reshape(binaryCode.shape[0], self.Npole, int(x.shape[-1]/self.dim), self.dim)
-        label = self.Classifier(binary_reshape)
-
-        return label, binaryCode, Reconstruction, sparseCode, tenc_out
-
-class DynamicStream(nn.Module):
-    def __init__(self, num_class, Npole, num_binary, Drr, Dtheta, dim, dataType, Inference, gpu_id, fistaLam, gumbel=1):
-        super(DynamicStream, self).__init__()
-        self.num_class = num_class
-        self.Npole = Npole
-        self.num_binary = num_binary
-        self.Drr = Drr
-        self.Dtheta = Dtheta
-        self.Inference = Inference
-        self.gpu_id = gpu_id
-        self.dim = dim
-        self.dataType = dataType
-        self.fistaLam = fistaLam
-        self.gumbel = gumbel
-        
-        self.sparseCoding = DyanEncoder(self.Drr, self.Dtheta,  lam=fistaLam, gpu_id=self.gpu_id)
-        print('Dynamic Stream')
-
-        if self.gumbel:
-            print('gumbel')
-            self.BinaryCoding = GumbelSigmoid()
-        else:
-            self.BinaryCoding = Binarization(self.Npole)
-
-        self.Classifier = classificationHead(num_class=self.num_class, Npole=Npole, dataType=self.dataType)
-        
-    def forward(self, x, T):
-        
-        sparseCode, Dict, _ = self.sparseCoding(x, T)
-
-        if self.gumbel:
-            'for GUMBEL'
-            binaryCode = self.BinaryCoding(sparseCode**2, force_hard=True, temperature=0.1, inference=self.Inference)
-        else:
-            'Learned Binary coding'
-            binaryCode = self.BinaryCoding(sparseCode)
-
-        sparse_binary = sparseCode * binaryCode
-        Reconstruction = torch.matmul(Dict, sparse_binary)
-
-        binary_reshape = binaryCode.reshape(binaryCode.shape[0], self.Npole, int(x.shape[-1]/self.dim), self.dim)
-        label = self.Classifier(binary_reshape)
-
-        return label, binaryCode, Reconstruction, sparseCode, Dict
 
 class Fullclassification(nn.Module):
     def __init__(self, num_class, Npole, num_binary, Drr, Dtheta,dim, dataType, Inference, gpu_id, fistaLam):
@@ -461,40 +264,22 @@ class Fullclassification(nn.Module):
         self.fistaLam = fistaLam
         # self.BinaryCoding = binaryCoding(num_binary=self.num_binary)
         self.BinaryCoding = GumbelSigmoid()
-        self.Classifier = classificationHead(num_class=self.num_class, Npole=Npole, dataType=self.dataType)
-        # self.sparsecoding = sparseCodingGenerator(self.Drr, self.Dtheta, self.PRE, self.gpu_id)
+        self.Classifier = classificationGlobal(num_class=self.num_class, Npole=Npole, dataType=self.dataType)
         self.sparseCoding = DyanEncoder(self.Drr, self.Dtheta,  lam=fistaLam, gpu_id=self.gpu_id)
-        self.data = None
-
     def forward(self, x, T):
-        # sparseCode, Dict = self.sparsecoding.forward2(x, T)
-        self.data = x
-        sparseCode, Dict, _ = self.sparseCoding(x, T)
-
-        # inp = sparseCode.permute(2, 1, 0).unsqueeze(-1)
-        # binaryCode = self.BinaryCoding(inp)
-
-        # sparseCode = sparseCode**2
-        # pdb.set_trace()
-        #sparseCode = sparseCode.detach() # for debug
-
-        # inp = separseCode.permute(2, 1, 0).unsqueeze(-1)
-        # binaryCode = self.BinaryCoding(inp)
-
+        sparseCode, Dict, R = self.sparseCoding.forward2(x, T) # w.o. RH
+        # sparseCode, Dict, Reconstruction  = self.sparseCoding(x, T) # w.RH
 
         'for GUMBEL'
-        binaryCode = self.BinaryCoding(sparseCode**2, force_hard=True, inference=self.Inference)
-        #
+        binaryCode = self.BinaryCoding(sparseCode**2, force_hard=True, temperature=0.1, inference=self.Inference)
         temp1 = sparseCode * binaryCode
+        # temp = binaryCode.reshape(binaryCode.shape[0], self.Npole, int(x.shape[-1]/self.dim), self.dim)
         Reconstruction = torch.matmul(Dict, temp1)
 
-        # temp = binaryCode.t().reshape(self.num_binary, int(x.shape[-1]/self.dim), self.dim).unsqueeze(0)
-        # print('binarycode shape:', binaryCode.shape)
-        temp = binaryCode.reshape(binaryCode.shape[0], self.Npole, int(x.shape[-1]/self.dim), self.dim)
-        label = self.Classifier(temp)
-        # Reconstruction = torch.matmul(Dict, sparseCode)
+        label = self.Classifier(binaryCode)
 
-        return label, binaryCode, Reconstruction, sparseCode, Dict
+        return label, binaryCode, Reconstruction
+
 
 class twoStreamClassification(nn.Module):
     def __init__(self, num_class, Npole, num_binary, Drr, Dtheta, dim, gpu_id, inference, fistaLam, dataType, kinetics_pretrain):
@@ -553,7 +338,7 @@ if __name__ == '__main__':
     # x = torch.randn(1, 161, 20, 3).cuda(gpu_id)
     #
     # y = net(x)
-    N = 4*40
+    N = 2*40
     P, Pall = gridRing(N)
     Drr = abs(P)
     Drr = torch.from_numpy(Drr).float()
@@ -567,6 +352,9 @@ if __name__ == '__main__':
     T = x.shape[1]
 
     label, _, _ = net(x, xImg, T)
+
+
+
 
     print('check')
 

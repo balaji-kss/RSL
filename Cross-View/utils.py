@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn
 from torch.autograd import Variable
-from modelZoo.DyanOF import OFModel, fista
 random.seed(0)
 torch.manual_seed(0)
 np.random.seed(0)
@@ -191,18 +190,30 @@ def plotting(input, reconstruction,key_frame, imageName, saveDir, seqNum):
     plt.savefig(os.path.join(saveDir, imageName + '.png'))
 
 
-def loadModel(ckpt_file, T, gpu_id):
-    loadedcheckpoint = torch.load(ckpt_file, map_location=lambda storage, location: storage)
-    #loadedcheckpoint = torch.load(ckpt_file)
-    stateDict = loadedcheckpoint['state_dict']
+# def loadModel(ckpt_file, T, gpu_id):
+#     loadedcheckpoint = torch.load(ckpt_file, map_location=lambda storage, location: storage)
+#     #loadedcheckpoint = torch.load(ckpt_file)
+#     stateDict = loadedcheckpoint['state_dict']
+#
+#     # load parameters
+#     Dtheta = stateDict['l1.theta']
+#     Drr    = stateDict['l1.rr']
+#     model = OFModel(Drr, Dtheta, T, gpu_id)
+#     model.cuda(gpu_id)
+#
+#     return model
 
-    # load parameters
-    Dtheta = stateDict['l1.theta']
-    Drr    = stateDict['l1.rr']
-    model = OFModel(Drr, Dtheta, T, gpu_id)
-    model.cuda(gpu_id)
+def load_pretrainedModel(stateDict, net):
 
-    return model
+    new_dict = net.state_dict()
+    stateDict = stateDict['state_dict']
+    pre_dict = {k: v for k, v in stateDict.items() if k in new_dict}
+
+    new_dict.update(pre_dict)
+
+    net.load_state_dict(new_dict)
+
+    return net
 
 def get_Dictionary(T, numPole, gpu_id, addOne):
 

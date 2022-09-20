@@ -10,7 +10,6 @@ import torch
 from math import sqrt
 import numpy as np
 import pdb
-import random
 random.seed(0)
 np.random.seed(0)
 torch.manual_seed(0)
@@ -65,6 +64,7 @@ def creatRealDictionary(T, rr, theta, gpu_id):
     # dic = dic/G
 
     return dic
+
 
 def fista(D, Y, lambd,maxIter,gpu_id):
     # D = D.type(dtype=torch.double)
@@ -208,10 +208,12 @@ def fista_reweighted(D, Y, lambd, w, maxIter,gpu_id):
     # eig, v = torch.eig(DtD, eigenvectors=True)
     # eig, v = torch.linalg.eig(DtD)
     # L = torch.max(eig)
-    # L = torch.norm(DtD, 2)
+    L = torch.norm(DtD, 2)
+
     # L = torch.linalg.matrix_norm(DtD, 2)
-    eigs = torch.abs(torch.linalg.eigvals(DtD.cpu()))
-    L = torch.max(eigs)
+    # eigs = torch.abs(torch.linalg.eigvals(DtD.cpu()))
+    # L = torch.max(eigs)
+
     # print('max eigen:', L, 'min eigen:', torch.min(eigs), 'max D:', torch.max(D))
     # pdb.set_trace()
     Linv = 1/L
@@ -280,6 +282,7 @@ class DyanEncoder(nn.Module):
         self.gpu_id = gpu_id
 
     def forward(self, x,T):
+        'with RH'
         dic = creatRealDictionary(T, self.rr,self.theta, self.gpu_id)
         # print('rr:', self.rr, 'theta:', self.theta)
         # sparseCode = fista_new(dic,x,self.lam, 100,self.gpu_id)
@@ -305,6 +308,12 @@ class DyanEncoder(nn.Module):
 
         reconst = torch.matmul(dic, sparseCode)
         return sparseCode, dic, reconst
+    def forward2(self,x, T):
+        dic = creatRealDictionary(T, self.rr, self.theta, self.gpu_id)
+        sparseCode = fista_new(dic, x, self.lam, 100, self.gpu_id)
+        reconst = torch.matmul(dic, sparseCode)
+        return sparseCode, dic, reconst
+
 
 if __name__ == '__main__':
     N = 80*2
@@ -320,5 +329,5 @@ if __name__ == '__main__':
     input = torch.randn(1, T,25*2).cuda(gpu_id)
 
     out,dic,_ = model(input, T)
-    print('out shape: ', out.shape)
+
     print('check')

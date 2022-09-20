@@ -1,0 +1,5 @@
+This folder includes log files while training and testing with different configurations
+
+'dy_cl_single_finetune':  sparseCdoe + classification, single clips, trained with pretrained DYAN
+
+'dynamicStream_single_finetune' : full dynamic-stream pipeline, single clips, trained with pretrained DYAN 
