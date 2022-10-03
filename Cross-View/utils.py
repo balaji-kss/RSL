@@ -208,7 +208,7 @@ def load_pretrainedModel(stateDict, net):
     new_dict = net.state_dict()
     stateDict = stateDict['state_dict']
     pre_dict = {k: v for k, v in stateDict.items() if k in new_dict}
-
+    print('pre_dict keys ', pre_dict.keys())    
     new_dict.update(pre_dict)
 
     net.load_state_dict(new_dict)

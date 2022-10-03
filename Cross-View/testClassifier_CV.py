@@ -27,8 +27,7 @@ def testing(dataloader,net, gpu_id, clip):
             # label,_,_ = net(input, imageData, t, fusion) # 2S
             # label,_,_ = net.dynamicsClassifier(input, t) # fusion
             # label = net(imageData) #RGB only
-
-            label, _ = net(input, t) # 'DY + CL'
+            label, _, _ = net(input, t) # 'DY + CL'
             # label, _, _ = net(input, t) # DY+BL+CL
 
             if clip == 'Single':
@@ -88,9 +87,12 @@ def getPlots(LOSS,LOSS_CLS, LOSS_MSE, LOSS_BI, ACC, fig_name):
     plt.savefig(fname)
 
 if __name__ == "__main__":
-    gpu_id = 6
+
+    gpu_id = 0
     num_workers = 4
     'initialized params'
+
+    N = 80*2
     P, Pall = gridRing(N)
     Drr = abs(P)
     Drr = torch.from_numpy(Drr).float()
@@ -100,16 +102,16 @@ if __name__ == "__main__":
     T = 36
     dataset = 'NUCLA'
     clip = 'Single'
+    setup = 'setup1' # v1,v2 train, v3 test;
+    path_list = './data/CV/' + setup + '/'
     testSet = NUCLA_CrossView(root_list=path_list, dataType='2D', clip='Single', phase='test', cam='2,1', T=T,
                               setup=setup)
     testloader = DataLoader(testSet, batch_size=1, shuffle=True, num_workers=num_workers)
 
-
-
     net = classificationWSparseCode(num_class=10, Npole=N + 1, Drr=Drr, Dtheta=Dtheta, dataType='2D', dim=2,
                                     fistaLam=0.1, gpu_id=gpu_id).cuda(gpu_id)
 
-    ckpt = 'path/to/models/xxx.pth'
+    ckpt = '/home/balaji/Documents/code/RSL/Thesis/Cross_view_actionRecognition/ModelFile/crossView_NUCLA/Single/dyan_cl/T36_fista01_openpose/60.pth'
     stateDict = torch.load(ckpt, map_location="cuda:" + str(gpu_id))['state_dict']
     net.load_state_dict(stateDict)
 

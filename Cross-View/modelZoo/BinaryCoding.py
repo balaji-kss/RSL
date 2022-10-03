@@ -6,6 +6,8 @@ from utils import *
 from modelZoo.actRGB import *
 from modelZoo.gumbel_module import *
 from scipy.spatial import distance
+from modelZoo.transformer import TransformerEncoder, TransformerDecoder
+
 class GroupNorm(nn.Module):
     r"""Applies Group Normalization over a mini-batch of inputs as described in
     the paper `Group Normalization`_ .
@@ -238,7 +240,6 @@ class classificationWSparseCode(nn.Module):
         self.fistaLam = fistaLam
         self.sparseCoding = DyanEncoder(self.Drr, self.Dtheta,lam=self.fistaLam, gpu_id=self.gpu_id)
 
-
     def forward(self, x, T):
         sparseCode, Dict, Reconstruction  = self.sparseCoding.forward2(x, T) # w.o. RH
         # sparseCode, Dict,_ = self.sparseCoding(x, T) #RH
@@ -248,6 +249,83 @@ class classificationWSparseCode(nn.Module):
 
         return label, Reconstruction
 
+class Tenc_SparseC_Cl(nn.Module):
+    def __init__(self, num_class, Npole, Drr, Dtheta, dataType,dim,fistaLam, gpu_id):
+        super(Tenc_SparseC_Cl, self).__init__()
+        self.num_class = num_class
+        self.Npole = Npole
+        self.Drr = Drr
+        self.Dtheta = Dtheta
+        # self.T = T
+        self.gpu_id = gpu_id
+        self.dim = dim
+        self.dataType = dataType
+        self.fistaLam = fistaLam
+        
+        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=2048, num_heads=5, num_layers=8, dropout=0.1)
+        self.sparse_coding = DyanEncoder(self.Drr, self.Dtheta,lam=self.fistaLam, gpu_id=self.gpu_id)
+        self.Classifier = classificationGlobal(num_class=self.num_class, Npole=Npole, dataType=self.dataType)
+
+    def forward(self, x, T):
+        
+        tenc_out = self.transformer_encoder(x)
+
+        sparseCode, Dict, Reconstruction  = self.sparse_coding.forward2(tenc_out, T) # w.o. RH
+
+        label = self.Classifier(sparseCode)
+
+        return label, Reconstruction, tenc_out
+
+class Dyan_Autoencoder(nn.Module):
+    def __init__(self, Drr, Dtheta, dim, dataType, Inference, gpu_id, fistaLam):
+        super(Dyan_Autoencoder, self).__init__()
+
+        self.Drr = Drr
+        self.Dtheta = Dtheta
+        self.Inference = Inference
+        self.gpu_id = gpu_id
+        self.dim = dim
+        self.dataType = dataType
+        self.fistaLam = fistaLam
+
+        print('***** Dyan Autoencoder *****')
+
+        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=2048, num_heads=5, num_layers=8, dropout=0.1)
+
+        self.sparse_coding = DyanEncoder(self.Drr, self.Dtheta,  lam=fistaLam, gpu_id=self.gpu_id)
+        
+        self.transformer_decoder = TransformerDecoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=2048, num_heads=5, num_layers=8, dropout=0.1)
+
+    def get_tgt_mask(self, size, batch_size) -> torch.tensor:
+
+        # Generates a square matrix where the each row allows one word more to be seen
+        mask = torch.tril(torch.ones(size, size) == 1) # Lower triangular matrix
+        mask = mask.float()
+        mask = mask.masked_fill(mask == 0, float('-inf')) # Convert zeros to -inf
+        mask = mask.masked_fill(mask == 1, float(0.0)) # Convert ones to 0
+        
+        # EX for size=5:
+        # [[0., -inf, -inf, -inf, -inf],
+        #  [0.,   0., -inf, -inf, -inf],
+        #  [0.,   0.,   0., -inf, -inf],
+        #  [0.,   0.,   0.,   0., -inf],
+        #  [0.,   0.,   0.,   0.,   0.]]
+        
+        return mask.repeat(5 * batch_size, 1, 1).cuda()
+
+    def forward(self, x, T):
+        
+        tenc_out = self.transformer_encoder(x)
+
+        sparse_code, Dict, _ = self.sparse_coding.forward2(tenc_out, T)
+
+        dyan_out = torch.matmul(Dict, sparse_code)
+        
+        self.tgt_mask = self.get_tgt_mask(dyan_out.shape[1], dyan_out.shape[0])
+
+        tdec_out = self.transformer_decoder(dyan_out, self.tgt_mask)
+
+        return tdec_out, dyan_out, tenc_out
 
 class Fullclassification(nn.Module):
     def __init__(self, num_class, Npole, num_binary, Drr, Dtheta,dim, dataType, Inference, gpu_id, fistaLam):
