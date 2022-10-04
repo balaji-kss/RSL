@@ -107,7 +107,6 @@ for epoch in range(1, Epoch + 1):
         total_loss.append(loss.data.item())
         loss_dyan.append(dyan_mse.data.item())
         loss_inp_recon.append(input_mse.data.item())
-        #lossBi.append(L1loss(binaryCode, bi_gt).data.item())
 
     total_loss_avg = np.mean(np.array(total_loss))
     loss_dyan_avg = np.mean(np.array(loss_dyan))
@@ -122,14 +121,4 @@ for epoch in range(1, Epoch + 1):
     if epoch % 10 == 0:
         torch.save({'epoch': epoch + 1, 'state_dict': net.state_dict(),
                     'optimizer': optimizer.state_dict()}, saveModel + str(epoch) + '.pth')
-    # if epoch % 100 == 0:
-    #     Acc = testing(testloader, net, gpu_id, clip)
-
-    #     print('testing epoch:',epoch, 'Acc:%.4f'% Acc)
-    #     ACC.append(Acc)
-
-
-'plotting results:'
-# getPlots(LOSS,LOSS_CLS, LOSS_MSE, LOSS_BI, ACC,fig_name='DY_CL.pdf')
-
 print('done')
