@@ -4,10 +4,12 @@ from torch.optim import lr_scheduler
 from modelZoo.BinaryCoding import *
 import matplotlib.pyplot as plt
 
+mseLoss = torch.nn.MSELoss()
 
 def testing(dataloader,net, gpu_id, clip):
     count = 0
     pred_cnt = 0
+    global_recon_loss = 0
 
     with torch.no_grad():
         for i, sample in enumerate(dataloader):
@@ -24,11 +26,13 @@ def testing(dataloader,net, gpu_id, clip):
                 t = skeleton.shape[2]
                 input = skeleton.reshape(skeleton.shape[0]*skeleton.shape[1], t, -1)
 
-            # label,_,_ = net(input, imageData, t, fusion) # 2S
-            # label,_,_ = net.dynamicsClassifier(input, t) # fusion
-            # label = net(imageData) #RGB only
-            label, _, _ = net(input, t) # 'DY + CL'
-            # label, _, _ = net(input, t) # DY+BL+CL
+            
+            # label, dyan_out = net(input, t) # 'DY + CL'
+            # dyan_inp = input
+
+            label, dyan_out, dyan_inp = net(input, t) # 'Tenc + DY + CL'
+            recon_loss = mseLoss(dyan_out, dyan_inp).data.item()
+            global_recon_loss += recon_loss
 
             if clip == 'Single':
                 label = label
@@ -45,8 +49,13 @@ def testing(dataloader,net, gpu_id, clip):
             count += y.shape[0]
             pred_cnt += torch.sum(correct).data.item()
 
-        Acc = pred_cnt/count
+            recon_loss_avg = global_recon_loss/count
+            #print('recon_loss: ', np.round(recon_loss, 5), ' recon_loss_avg: ', np.round(recon_loss_avg, 5))
 
+        Acc = pred_cnt/count
+        recon_loss_avg = global_recon_loss/count
+        print(' recon_loss_avg: ', np.round(recon_loss_avg, 5))
+        
     return Acc
 
 def getPlots(LOSS,LOSS_CLS, LOSS_MSE, LOSS_BI, ACC, fig_name):
@@ -88,7 +97,7 @@ def getPlots(LOSS,LOSS_CLS, LOSS_MSE, LOSS_BI, ACC, fig_name):
 
 if __name__ == "__main__":
 
-    gpu_id = 0
+    gpu_id = 1
     num_workers = 4
     'initialized params'
 
@@ -106,12 +115,15 @@ if __name__ == "__main__":
     path_list = './data/CV/' + setup + '/'
     testSet = NUCLA_CrossView(root_list=path_list, dataType='2D', clip='Single', phase='test', cam='2,1', T=T,
                               setup=setup)
-    testloader = DataLoader(testSet, batch_size=1, shuffle=True, num_workers=num_workers)
+    testloader = DataLoader(testSet, batch_size=32, shuffle=True, num_workers=num_workers)
 
     net = classificationWSparseCode(num_class=10, Npole=N + 1, Drr=Drr, Dtheta=Dtheta, dataType='2D', dim=2,
                                     fistaLam=0.1, gpu_id=gpu_id).cuda(gpu_id)
 
-    ckpt = '/home/balaji/Documents/code/RSL/Thesis/Cross_view_actionRecognition/ModelFile/crossView_NUCLA/Single/dyan_cl/T36_fista01_openpose/60.pth'
+    # ckpt = '/home/balaji/Documents/code/RSL/Thesis/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/dyan_cl/T36_fista01_openpose/50.pth'
+    net = Tenc_SparseC_Cl(num_class=10, Npole=N + 1, Drr=Drr, Dtheta=Dtheta, dataType='2D', dim=2, fistaLam=0.1, gpu_id=gpu_id).cuda(gpu_id)
+    ckpt = '/home/balaji/Documents/code/RSL/Thesis/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_dyan_cl2/T36_fista01_openpose/100.pth'
+
     stateDict = torch.load(ckpt, map_location="cuda:" + str(gpu_id))['state_dict']
     net.load_state_dict(stateDict)
 

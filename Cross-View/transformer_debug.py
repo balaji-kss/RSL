@@ -11,12 +11,11 @@ map_loc = "cuda:" + str(gpu_id)
 # T = 36
 dataset = 'NUCLA'
 
-Alpha = 0 # bi loss
 lam1 = 2 # cls loss
 lam2 = 1 # mse loss
 
 N = 80 * 2
-Epoch = 60
+Epoch = 100
 # num_class = 10
 dataType = '2D'
 clip = 'Single'
@@ -32,14 +31,20 @@ T = 36 # input clip length
 
 fusion = False
 'initialized params'
-P,Pall = gridRing(N)
-Drr = abs(P)
-Drr = torch.from_numpy(Drr).float()
-Dtheta = np.angle(P)
-Dtheta = torch.from_numpy(Dtheta).float()
+# P, Pall = gridRing(N)
+# Drr = abs(P)
+# Drr = torch.from_numpy(Drr).float()
+# Dtheta = np.angle(P)
+# Dtheta = torch.from_numpy(Dtheta).float()
+
+# model_path = '/home/balaji/Documents/code/RSL/Thesis/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/dyan_cl/T36_fista01_openpose/50.pth'
+model_path = '/home/balaji/Documents/code/RSL/Thesis/RSL/Cross-View/pretrained/setup1/Single/pretrainedDyan.pth'
+stateDict = torch.load(model_path, map_location=map_loc)['state_dict']
+Drr = stateDict['sparseCoding.rr'].float()
+Dtheta = stateDict['sparseCoding.theta'].float()
 
 modelRoot = './ModelFile/crossView_NUCLA/'
-mode = '/dyan_cl/'
+mode = '/dyan_debug/'
 
 saveModel = modelRoot + clip + mode + 'T36_fista01_openpose/'
 if not os.path.exists(saveModel):
@@ -58,25 +63,32 @@ trainloader = DataLoader(trainSet, batch_size=bz, shuffle=True, num_workers=num_
 testSet = NUCLA_CrossView(root_list=path_list, dataType=dataType, clip=clip, phase='test', cam='2,1', T=T, setup=setup)
 testloader = DataLoader(testSet, batch_size=bz, shuffle=True, num_workers=num_workers)
 
-
 'dy+cl'
+print('Drr ', Drr)
+print('Dtheta ', Dtheta)
 net = classificationWSparseCode(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=0.1, gpu_id=gpu_id).cuda(gpu_id)
-dy_pretrain = './pretrained/' + setup + '/' + clip + '/pretrainedDyan.pth'
 
-'dy+bi+cl'
-# dy_pretrain = './pretrained/' + setup + '/' + clip + '/pretrainedDyan_BI.pth'
-# net = Fullclassification(num_class=10, Npole=N+1, num_binary=N+1, Drr=Drr, Dtheta=Dtheta, dim=2, dataType=dataType, Inference=True, gpu_id=gpu_id, fistaLam=0.1).cuda(gpu_id)
+#net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=0.1, gpu_id=gpu_id).cuda(gpu_id)
+#tenc_pretrain = './ModelFile/crossView_NUCLA/Single/tenc_recon_mask_wt/60.pth' 
 
-stateDict = torch.load(dy_pretrain, map_location=map_loc)
-net = load_pretrainedModel(stateDict, net)
+def freeze_params(model):
 
-'2-stream'
-# kinetics_pretrain = './pretrained/i3d_kinetics.pth'
-# net = twoStreamClassification(num_class=num_class, Npole=(N+1), num_binary=(N+1), Drr=Drr, Dtheta=Dtheta,
-#                                   PRE=0, dim=2, gpu_id=gpu_id, dataType=dataType, kinetics_pretrain=kinetics_pretrain).cuda(gpu_id)
+    for param in model.parameters():
+        param.requires_grad = False
 
-'rgb stream'
-# net = RGBAction(num_class=num_class, kinetics_pretrain=kinetics_pretrain).cuda(gpu_id)
+def load_pretrain_models(net, tenc_pretrain):
+
+    tenc_state_dict = torch.load(tenc_pretrain, map_location=map_loc)
+
+    print('**** load pretrained tenc ****')
+    net = load_pretrainedModel(tenc_state_dict, net)
+
+    print('**** freeze transformer_encoder params ****')
+    freeze_params(net.transformer_encoder)
+
+    return net
+
+#net = load_pretrain_models(net, tenc_pretrain)
 
 net.train()
 lr = 1e-4
@@ -84,26 +96,25 @@ lr_2 = 1e-4
 
 'for dy+cl:'
 optimizer = torch.optim.SGD(filter(lambda x: x.requires_grad, net.parameters()), lr=lr, weight_decay=0.001, momentum=0.9)
-
-'for dy+bi+cl'
-# optimizer = torch.optim.SGD([{'params':filter(lambda x: x.requires_grad, net.sparseCoding.parameters()), 'lr':lr_2},
-#                              {'params':filter(lambda x: x.requires_grad, net.Classifier.parameters()), 'lr':lr}], weight_decay=0.001, momentum=0.9)
-
+# optimizer = torch.optim.SGD([
+#                                 {'params':filter(lambda x: x.requires_grad, net.transformer_encoder.parameters()), 'lr':lr1},
+#                                 {'params':filter(lambda x: x.requires_grad, net.sparse_coding.parameters()), 'lr':lr2},
+#                                 {'params':filter(lambda x: x.requires_grad, net.Classifier.parameters()), 'lr':lr3}
+#                                 ], weight_decay=0.001, momentum=0.9)
 
 scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[30, 50], gamma=0.1)
 Criterion = torch.nn.CrossEntropyLoss()
 mseLoss = torch.nn.MSELoss()
 L1loss = torch.nn.SmoothL1Loss()
 
-
 LOSS = []
 ACC = []
 LOSS_CLS = []
 LOSS_MSE = []
 LOSS_BI = []
-print('Experiment config(setup, clip, lam1, lam2, lr):', setup, clip, lam1, lam2, lr)
-# print('Experiment config(setup, clip, lam1, lam2, lr, lr_2):', setup, clip, Alpha, lam1, lam2, lr, lr_2)
-for epoch in range(1, Epoch+1):
+print('Experiment config(setup, clip, lam1, lam2, lr1, lr2, lr3):', setup, clip, lam1, lam2, lr)
+
+for epoch in range(0, Epoch+1):
     print('start training epoch:', epoch)
     start_time = time.time()
     lossVal = []
@@ -114,7 +125,6 @@ for epoch in range(1, Epoch+1):
 
         # print('sample:', i)
         optimizer.zero_grad()
-
 
         skeletons = sample['input_skeletons']['normSkeleton'].float().cuda(gpu_id)
         input_images = sample['input_images'].float().cuda(gpu_id)
@@ -128,26 +138,23 @@ for epoch in range(1, Epoch+1):
         else:
             t = skeletons.shape[2]
             input_skeletons = skeletons.reshape(skeletons.shape[0]*skeletons.shape[1], t, -1) #bz,clip, T, 25, 2 --> bz, clip, T, 50
+
         'dy+cl:'
         actPred, output_skeletons = net(input_skeletons, t)
-        # 'dy+bi+cl:'
-        #actPred, binaryCode, output_skeletons = net(input_skeletons, t)
-        #bi_gt = torch.zeros_like(binaryCode).cuda(gpu_id)
+        dyan_input = input_skeletons
+        
         if clip == 'Single':
             actPred = actPred
         else:
             actPred = actPred.reshape(skeletons.shape[0], skeletons.shape[1], num_class)
             actPred = torch.mean(actPred, 1)
 
-        loss = lam1 * Criterion(actPred, gt_label) + lam2 * mseLoss(output_skeletons, input_skeletons) \
-               #+ Alpha*L1loss(binaryCode, bi_gt)
+        loss = lam1 * Criterion(actPred, gt_label) + lam2 * mseLoss(output_skeletons, dyan_input)
         loss.backward()
         optimizer.step()
         lossVal.append(loss.data.item())
         lossCls.append(Criterion(actPred, gt_label).data.item())
-        lossMSE.append(mseLoss(output_skeletons, input_skeletons).data.item())
-        #lossBi.append(L1loss(binaryCode, bi_gt).data.item())
-
+        lossMSE.append(mseLoss(output_skeletons, dyan_input).data.item())
 
     loss_val = np.mean(np.array(lossVal))
     LOSS.append(loss_val)
@@ -158,14 +165,13 @@ for epoch in range(1, Epoch+1):
     end_time = time.time()
     time_per_epoch = (end_time - start_time)/60.0 #mins
 
-    print('epoch:', epoch, ' |time: ', np.round(time_per_epoch, 3), '|loss:', loss_val, '|cls:', np.mean(np.array(lossCls)), '|mse:', np.mean(np.array(lossMSE)))#, '|bi:', np.mean(np.array(lossBi)))
-
+    print('epoch:', epoch, ' |time: ', np.round(time_per_epoch, 3), '|loss:', loss_val, '|cls:', np.mean(np.array(lossCls)), '|mse:', np.mean(np.array(lossMSE)))
 
     scheduler.step()
-    if epoch % 10 == 0:
+    if epoch % 5 == 0:
         torch.save({'epoch': epoch + 1, 'state_dict': net.state_dict(),
                     'optimizer': optimizer.state_dict()}, saveModel + str(epoch) + '.pth')
-    if epoch % 10 == 0:
+    if epoch % 5 == 0:
         Acc = testing(testloader, net, gpu_id, clip)
 
         print('testing epoch:',epoch, 'Acc:%.4f'% Acc)

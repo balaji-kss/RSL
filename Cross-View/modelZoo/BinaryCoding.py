@@ -175,6 +175,7 @@ class classificationGlobal(nn.Module):
         self.cls = nn.Linear(128, self.num_class)
 
         self.relu = nn.LeakyReLU()
+
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -243,7 +244,9 @@ class classificationWSparseCode(nn.Module):
     def forward(self, x, T):
         sparseCode, Dict, Reconstruction  = self.sparseCoding.forward2(x, T) # w.o. RH
         # sparseCode, Dict,_ = self.sparseCoding(x, T) #RH
-        # sparseCode = sparseCode.detach() #for debug
+        sparseCode = sparseCode.detach() #for debug
+        
+        # print('sparseCode: ', sparseCode.shape, sparseCode)
 
         label = self.Classifier(sparseCode)
 
@@ -270,7 +273,12 @@ class Tenc_SparseC_Cl(nn.Module):
         
         tenc_out = self.transformer_encoder(x)
 
+        tenc_out = tenc_out.detach()
+
         sparseCode, Dict, Reconstruction  = self.sparse_coding.forward2(tenc_out, T) # w.o. RH
+
+        sparseCode = sparseCode.detach()
+        #print('sparseCode: ', sparseCode.shape, sparseCode)
 
         label = self.Classifier(sparseCode)
 
