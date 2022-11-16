@@ -13,12 +13,50 @@ from PIL import Image, ImageFilter, ImageEnhance
 import cv2
 import json
 
-from utils import Gaussian, DrawGaussian
+#from utils import Gaussian, DrawGaussian
+#from utils import DrawGaussian
 random.seed(0)
 np.random.seed(0)
 torch.manual_seed(0)
 
+def Gaussian(sigma):
+  if sigma == 7:
+    return np.array([0.0529,  0.1197,  0.1954,  0.2301,  0.1954,  0.1197,  0.0529,
+                     0.1197,  0.2709,  0.4421,  0.5205,  0.4421,  0.2709,  0.1197,
+                     0.1954,  0.4421,  0.7214,  0.8494,  0.7214,  0.4421,  0.1954,
+                     0.2301,  0.5205,  0.8494,  1.0000,  0.8494,  0.5205,  0.2301,
+                     0.1954,  0.4421,  0.7214,  0.8494,  0.7214,  0.4421,  0.1954,
+                     0.1197,  0.2709,  0.4421,  0.5205,  0.4421,  0.2709,  0.1197,
+                     0.0529,  0.1197,  0.1954,  0.2301,  0.1954,  0.1197,  0.0529]).reshape(7, 7)
+  elif sigma == n:
+    return g_inp
+  else:
+    raise Exception('Gaussian {} Not Implement'.format(sigma))
+
+def DrawGaussian(img, pt, sigma):
+    tmpSize = int(np.math.ceil(3 * sigma))
+    # if math.isnan(float(pt[0] - tmpSize)):
+    #     print('NaN')
+    ul = [int(np.math.floor(pt[0] - tmpSize)), int(np.math.floor(pt[1] - tmpSize))]
+    br = [int(np.math.floor(pt[0] + tmpSize)), int(np.math.floor(pt[1] + tmpSize))]
+
+    if ul[0] > img.shape[1] or ul[1] > img.shape[0] or br[0] < 1 or br[1] < 1:
+        return img
+
+    size = 2 * tmpSize + 1
+    g = Gaussian(size)
+
+    g_x = [max(0, -ul[0]), min(br[0], img.shape[1]) - max(0, ul[0]) + max(0, -ul[0])]
+    g_y = [max(0, -ul[1]), min(br[1], img.shape[0]) - max(0, ul[1]) + max(0, -ul[1])]
+
+    img_x = [max(0, ul[0]), min(br[0], img.shape[1])]
+    img_y = [max(0, ul[1]), min(br[1], img.shape[0])]
+
+    img[img_y[0]:img_y[1], img_x[0]:img_x[1]] = g[g_y[0]:g_y[1], g_x[0]:g_x[1]]
+    return img
+
 """
+
    Hip_Center = 1;
    Spine = 2;
    Shoulder_Center = 3;
@@ -117,6 +155,11 @@ class NUCLA_CrossView(Dataset):
             list_samples = np.loadtxt(file_list, dtype=str)
             for name_sample in list_samples:
                 self.samples_list.append((view, name_sample))
+        
+        # print('before train len ', len(self.samples_list))
+        # random.shuffle(self.samples_list)
+        # self.samples_list = self.samples_list[: len(self.samples_list)//2]
+        # print('after train len ', len(self.samples_list))
 
         self.test_list= np.loadtxt(os.path.join(self.root_list, f"{self.test_view}_test.list"), dtype=str)
         temp = []
@@ -124,6 +167,11 @@ class NUCLA_CrossView(Dataset):
             subject = item.split('_')[1]
             if subject != 's05':
                 temp.append(item)
+
+        # print('before test len ', len(temp))
+        # random.shuffle(temp)
+        # temp = temp[: len(temp)//2]
+        # print('after train len ', len(temp))
 
         if self.phase == 'test':
             self.samples_list = temp
@@ -416,7 +464,7 @@ if __name__ == "__main__":
     setup = 'setup1'  # v1,v2 train, v3 test;
     path_list = '../data/CV/' + setup + '/'
     # root_skeleton = '/data/Dan/N-UCLA_MA_3D/openpose_est'
-    trainSet = NUCLA_CrossView(root_list=path_list, dataType='2D', clip='Multi', phase='train', cam='2,1,3', T=36,
+    trainSet = NUCLA_CrossView(root_list=path_list, dataType='2D', clip='Single', phase='train', cam='2,1', T=36,
                                setup=setup)
 
     # pass
@@ -429,7 +477,6 @@ if __name__ == "__main__":
         images = sample['input_images']
         inp_skeleton = sample['input_skeletons']['normSkeleton']
         label = sample['action']
-        tensor = torch.cat((inp_skeleton))
-        print(len(inp_skeleton), tensor.shape, label.shape)
+        print(len(inp_skeleton), inp_skeleton.shape, label.shape)
 
     print('done')

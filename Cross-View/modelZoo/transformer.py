@@ -4,23 +4,26 @@ from torch import nn, Tensor
 
 class PositionalEncoding(nn.Module):
 
-    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+    def __init__(self, d_model, dropout = 0.1, max_len = 36):
+        
         super().__init__()
-        self.dropout = nn.Dropout(p=dropout)
 
-        position = torch.arange(max_len).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
-        pe = torch.zeros(max_len, 1, d_model)
-        pe[:, 0, 0::2] = torch.sin(position * div_term)
-        pe[:, 0, 1::2] = torch.cos(position * div_term)
+        self.dropout = nn.Dropout(p=dropout)
+        position = torch.arange(max_len).unsqueeze(1)  #(max_len, 1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model)) #(div_term) 
+
+        pe = torch.zeros(1, max_len, d_model)
+        pe[0, :, 0::2] = torch.sin(position * div_term) #(max_len, div_term)
+        pe[0, :, 1::2] = torch.cos(position * div_term) #(max_len, div_term)
         self.register_buffer('pe', pe)
 
     def forward(self, x: Tensor) -> Tensor:
         """
         Args:
-            x: Tensor, shape [seq_len, batch_size, embedding_dim]
+            x: Tensor, shape [batch_size, seq_len, embedding_dim]
         """
-        x = x + self.pe[:x.size(0)]
+        x = x + self.pe[:, :x.size(1), :] # (1, T, 50)
+
         return self.dropout(x)
 
 class TransformerEncoder(nn.Module):
@@ -43,7 +46,7 @@ class TransformerEncoder(nn.Module):
             self.input_layer = None
             self.output_layer = None
 
-        self.pos_encoder = PositionalEncoding(self.embed_proj_dim, self.dropout)        
+        self.pos_encoder = PositionalEncoding(self.embed_proj_dim, dropout=self.dropout)
         self.encoder_layer = nn.TransformerEncoderLayer(d_model=self.embed_proj_dim, nhead=self.num_heads, dim_feedforward=self.ff_dim, activation=self.activation, dropout=self.dropout, batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=self.num_layers)
 
@@ -63,6 +66,7 @@ class TransformerEncoder(nn.Module):
             x = self.input_layer(x)
 
         pe_out = self.pos_encoder(x)
+
         tenc_out = self.transformer_encoder(pe_out)
 
         if self.output_layer:
@@ -117,3 +121,9 @@ class TransformerDecoder(nn.Module):
             tdec_out = self.output_layer(tdec_out)
 
         return tdec_out
+
+if __name__ == "__main__":
+
+    transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=2048, num_heads=5, num_layers=8, dropout=0.1)
+    x = torch.rand(2, 20, 50)
+    out = transformer_encoder(x)

@@ -26,7 +26,6 @@ def testing(dataloader,net, gpu_id, clip):
                 t = skeleton.shape[2]
                 input = skeleton.reshape(skeleton.shape[0]*skeleton.shape[1], t, -1)
 
-            
             # label, dyan_out = net(input, t) # 'DY + CL'
             # dyan_inp = input
 

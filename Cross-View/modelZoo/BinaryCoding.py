@@ -253,7 +253,7 @@ class classificationWSparseCode(nn.Module):
         return label, Reconstruction
 
 class Tenc_SparseC_Cl(nn.Module):
-    def __init__(self, num_class, Npole, Drr, Dtheta, dataType,dim,fistaLam, gpu_id):
+    def __init__(self, num_class, Npole, Drr, Dtheta, dataType, dim, fistaLam, gpu_id):
         super(Tenc_SparseC_Cl, self).__init__()
         self.num_class = num_class
         self.Npole = Npole
@@ -270,20 +270,15 @@ class Tenc_SparseC_Cl(nn.Module):
         self.Classifier = classificationGlobal(num_class=self.num_class, Npole=Npole, dataType=self.dataType)
 
     def forward(self, x, T):
-        
+    
         tenc_out = self.transformer_encoder(x)
 
-        tenc_out = tenc_out.detach()
-
         sparseCode, Dict, Reconstruction  = self.sparse_coding.forward2(tenc_out, T) # w.o. RH
-
-        sparseCode = sparseCode.detach()
-        #print('sparseCode: ', sparseCode.shape, sparseCode)
 
         label = self.Classifier(sparseCode)
 
         return label, Reconstruction, tenc_out
-
+        
 class Dyan_Autoencoder(nn.Module):
     def __init__(self, Drr, Dtheta, dim, dataType, Inference, gpu_id, fistaLam):
         super(Dyan_Autoencoder, self).__init__()
@@ -333,7 +328,7 @@ class Dyan_Autoencoder(nn.Module):
 
         tdec_out = self.transformer_decoder(dyan_out, self.tgt_mask)
 
-        return tdec_out, dyan_out, tenc_out
+        return dyan_out, tenc_out, tdec_out
 
 class Fullclassification(nn.Module):
     def __init__(self, num_class, Npole, num_binary, Drr, Dtheta,dim, dataType, Inference, gpu_id, fistaLam):
@@ -424,23 +419,23 @@ if __name__ == '__main__':
     # x = torch.randn(1, 161, 20, 3).cuda(gpu_id)
     #
     # y = net(x)
-    N = 2*40
+    N = 2*80
+    num_class = 10
+    dataType = '2D'
+
     P, Pall = gridRing(N)
     Drr = abs(P)
     Drr = torch.from_numpy(Drr).float()
     Dtheta = np.angle(P)
     Dtheta = torch.from_numpy(Dtheta).float()
     kinetics_pretrain = '../pretrained/i3d_kinetics.pth'
-    net = twoStreamClassification(num_class=10, Npole=161, num_binary=161, Drr=Drr, Dtheta=Dtheta,
-                                  PRE=0,dim=2, gpu_id=gpu_id, kinetics_pretrain=kinetics_pretrain).cuda(gpu_id)
+    # net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=0.1, gpu_id=gpu_id).cuda(gpu_id)
+    net = Dyan_Autoencoder(Drr, Dtheta, dim=2, dataType=dataType, Inference=True, gpu_id=gpu_id, fistaLam=0.1).cuda(gpu_id)
     x = torch.randn(1, 36, 50).cuda(gpu_id)
     xImg = torch.randn(1, 20, 3, 224, 224).cuda(gpu_id)
     T = x.shape[1]
 
-    label, _, _ = net(x, xImg, T)
-
-
-
+    label, _, _ = net(x, T)
 
     print('check')
 

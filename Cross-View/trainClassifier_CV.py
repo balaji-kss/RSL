@@ -39,7 +39,7 @@ Dtheta = np.angle(P)
 Dtheta = torch.from_numpy(Dtheta).float()
 
 modelRoot = './ModelFile/crossView_NUCLA/'
-mode = '/dyan_cl/'
+mode = '/dyan_cl_half/'
 
 saveModel = modelRoot + clip + mode + 'T36_fista01_openpose/'
 if not os.path.exists(saveModel):

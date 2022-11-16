@@ -28,7 +28,7 @@ else:
 T = 36 # input clip length
 
 'initialized params'
-P,Pall = gridRing(N)
+P, Pall = gridRing(N)
 Drr = abs(P)
 Drr = torch.from_numpy(Drr).float()
 Dtheta = np.angle(P)
@@ -36,7 +36,7 @@ Dtheta = torch.from_numpy(Dtheta).float()
 
 modelRoot = './ModelFile/crossView_NUCLA/'
 
-saveModel = modelRoot + clip +  '/tenc_recon_mask_wt/'
+saveModel = modelRoot + clip +  '/tenc_recon_posencfix_diff/'
 if not os.path.exists(saveModel):
     os.makedirs(saveModel)
 print('model path:', saveModel)
@@ -95,10 +95,10 @@ for epoch in range(1, Epoch + 1):
             t = skeletons.shape[2]
             input_skeletons = skeletons.reshape(skeletons.shape[0]*skeletons.shape[1], t, -1) #bz,clip, T, 25, 2 --> bz, clip, T, 50
 
-        tdec_out, dyan_out, tenc_out = net(input_skeletons, t)
+        dyan_out, tenc_out, tdec_out = net(input_skeletons, t)
         
         dyan_mse = mseLoss(dyan_out, tenc_out)
-        input_mse = mseLoss(tdec_out, input_skeletons)
+        input_mse = mseLoss(tenc_out, input_skeletons)
 
         loss = lam1 * dyan_mse + lam2 * input_mse  
         loss.backward()
