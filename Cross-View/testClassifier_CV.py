@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 mseLoss = torch.nn.MSELoss()
 
-def testing(dataloader,net, gpu_id, clip):
+def testing(dataloader, net, gpu_id, clip):
     count = 0
     pred_cnt = 0
     global_recon_loss = 0
