@@ -22,7 +22,7 @@ clip = 'Single'
 
 if clip == 'Single':
     num_workers = 8
-    bz = 32
+    bz = 1
 else:
     num_workers = 4
     bz = 8
@@ -32,7 +32,7 @@ T = 36 # input clip length
 fusion = False
 'initialized params'
 
-model_path = '/home/balaji/Documents/code/RSL/Thesis/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_posencfix/100.pth'
+model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon/100.pth'
 # model_path = '/home/balaji/Documents/code/RSL/Thesis/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_dyan_posfix/T36_fista01_openpose/100.pth'
 stateDict = torch.load(model_path, map_location=map_loc)['state_dict']
 Drr = stateDict['sparse_coding.rr'].float()
@@ -42,7 +42,7 @@ print('Drr ', Drr)
 print('Dtheta ', Dtheta)
 
 modelRoot = './ModelFile/crossView_NUCLA/'
-mode = '/tenc_dyan_posfix1_long/'
+mode = '/tenc_dyan_exp2/'
 
 saveModel = modelRoot + clip + mode + 'T36_fista01_openpose/'
 if not os.path.exists(saveModel):
@@ -81,9 +81,9 @@ def load_pretrain_models(net, model_path):
 net = load_pretrain_models(net, model_path)
 
 net.train()
-lr1 = 1e-4
-lr2 = 1e-4
-lr3 = 1e-3
+lr1 = 5e-6
+lr2 = 5e-6
+lr3 = 1e-4
 
 'for dy+cl:'
 # optimizer = torch.optim.SGD(filter(lambda x: x.requires_grad, net.parameters()), lr=lr, weight_decay=0.001, momentum=0.9)
@@ -112,9 +112,11 @@ for epoch in range(0, Epoch+1):
     lossCls = []
     lossBi = []
     lossMSE = []
+    count = 0
+    pred_cnt = 0
     for i, sample in enumerate(trainloader):
 
-        print('sample:', i)
+        # print('sample:', i)
         optimizer.zero_grad()
 
         skeletons = sample['input_skeletons']['normSkeleton'].float().cuda(gpu_id)
@@ -130,20 +132,31 @@ for epoch in range(0, Epoch+1):
             input_skeletons = skeletons.reshape(skeletons.shape[0]*skeletons.shape[1], t, -1) #bz,clip, T, 25, 2 --> bz, clip, T, 50
 
         'dy+cl:'
+        # print('input_skeletons shape ', input_skeletons.shape) #(32, 36, 50)
         actPred, output_skeletons, dyan_input = net(input_skeletons, t)
         
         if clip == 'Single':
             actPred = actPred
+            pred = torch.argmax(actPred, 1)
         else:
             actPred = actPred.reshape(skeletons.shape[0], skeletons.shape[1], num_class)
             actPred = torch.mean(actPred, 1)
+            pred = torch.argmax(actPred, 1)
 
-        loss = lam1 * Criterion(actPred, gt_label) + lam2 * mseLoss(output_skeletons, dyan_input)
+        cls_loss = Criterion(actPred, gt_label)
+        mse_loss = mseLoss(output_skeletons, dyan_input)
+        loss = lam1 * cls_loss + lam2 * mse_loss
         loss.backward()
         optimizer.step()
+
         lossVal.append(loss.data.item())
-        lossCls.append(Criterion(actPred, gt_label).data.item())
-        lossMSE.append(mseLoss(output_skeletons, dyan_input).data.item())
+        lossCls.append(cls_loss.data.item())
+        lossMSE.append(mse_loss.data.item())
+
+        ## Train acc
+        correct = torch.eq(gt_label, pred).int()
+        count += gt_label.shape[0]
+        pred_cnt += torch.sum(correct).data.item()
 
     loss_val = np.mean(np.array(lossVal))
     LOSS.append(loss_val)
@@ -152,9 +165,10 @@ for epoch in range(0, Epoch+1):
     LOSS_BI.append(np.mean(np.array(lossBi)))
 
     end_time = time.time()
+    train_acc = pred_cnt/count
     time_per_epoch = (end_time - start_time)/60.0 #mins
 
-    print('epoch:', epoch, ' |time: ', np.round(time_per_epoch, 3), '|loss:', loss_val, '|cls:', np.mean(np.array(lossCls)), '|mse:', np.mean(np.array(lossMSE)))
+    print('epoch:', epoch, ' |time: ', np.round(time_per_epoch, 3), '|loss:', loss_val, '|cls:', np.mean(np.array(lossCls)), '|mse:', np.mean(np.array(lossMSE)), '|acc:', train_acc)
 
     scheduler.step()
     if epoch % 5 == 0:

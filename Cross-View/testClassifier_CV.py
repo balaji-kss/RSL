@@ -26,8 +26,9 @@ def testing(dataloader, net, gpu_id, clip):
                 t = skeleton.shape[2]
                 input = skeleton.reshape(skeleton.shape[0]*skeleton.shape[1], t, -1)
 
-            # label, dyan_out = net(input, t) # 'DY + CL'
-            # dyan_inp = input
+            # print('input shape ', input.shape)
+            #label, dyan_out = net(input, t) # 'DY + CL'
+            #Edyan_inp = input
 
             label, dyan_out, dyan_inp = net(input, t) # 'Tenc + DY + CL'
             recon_loss = mseLoss(dyan_out, dyan_inp).data.item()

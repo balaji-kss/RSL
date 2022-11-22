@@ -8,13 +8,11 @@ import time
 gpu_id = 0
 map_loc = "cuda:" + str(gpu_id)
 
-# T = 36
 dataset = 'NUCLA'
 
 N = 80 * 2
 Epoch = 100
 
-# num_class = 10
 dataType = '2D'
 clip = 'Single'
 
@@ -36,7 +34,7 @@ Dtheta = torch.from_numpy(Dtheta).float()
 
 modelRoot = './ModelFile/crossView_NUCLA/'
 
-saveModel = modelRoot + clip +  '/tenc_recon_posencfix_diff/'
+saveModel = modelRoot + clip +  '/tenc_recon/'
 if not os.path.exists(saveModel):
     os.makedirs(saveModel)
 print('model path:', saveModel)
@@ -48,7 +46,6 @@ path_list = './data/CV/' + setup + '/'
 trainSet = NUCLA_CrossView(root_list=path_list, dataType=dataType, clip=clip, phase='train', cam='2,1', T=T,
                                 setup=setup)
 # #
-
 trainloader = DataLoader(trainSet, batch_size=bz, shuffle=True, num_workers=num_workers)
 
 testSet = NUCLA_CrossView(root_list=path_list, dataType=dataType, clip=clip, phase='test', cam='2,1', T=T, setup=setup)
@@ -63,7 +60,7 @@ lr = 1e-4
 optimizer = torch.optim.SGD(filter(lambda x: x.requires_grad, net.parameters()), lr=lr, weight_decay=0.001, momentum=0.9)
 
 
-scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[30, 50], gamma=0.1)
+scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[40, 80], gamma=0.1)
 mseLoss = torch.nn.MSELoss()
 
 LOSS = []
@@ -72,7 +69,7 @@ lam1, lam2 = 1, 10
 
 print('Experiment config(setup, clip, lam1, lam2, lr, lr_2):', setup, clip, lam1, lam2, lr)
 
-for epoch in range(1, Epoch + 1):
+for epoch in range(0, Epoch + 1):
     print('start training epoch:', epoch)
     start_time = time.time()
     loss_dyan = []
@@ -98,7 +95,7 @@ for epoch in range(1, Epoch + 1):
         dyan_out, tenc_out, tdec_out = net(input_skeletons, t)
         
         dyan_mse = mseLoss(dyan_out, tenc_out)
-        input_mse = mseLoss(tenc_out, input_skeletons)
+        input_mse = mseLoss(tdec_out, input_skeletons)
 
         loss = lam1 * dyan_mse + lam2 * input_mse  
         loss.backward()

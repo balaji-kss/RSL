@@ -109,13 +109,13 @@ class NUCLA_CrossView(Dataset):
 
     def __init__(self, root_list, dataType, clip, phase, cam, T, setup):
         self.root_list = root_list
-        self.data_root = '/data/Dan/N-UCLA_MA_3D/multiview_action'
+        self.data_root = '/data/N-UCLA_MA_3D/multiview_action'
         self.dataType = dataType
         self.clip = clip
         if self.dataType == '2D':
-            self.root_skeleton = '/data/Dan/N-UCLA_MA_3D/openpose_est'
+            self.root_skeleton = '/data/N-UCLA_MA_3D/openpose_est'
         else:
-            self.root_skeleton = '/data/Dan/N-UCLA_MA_3D/skeletons_3d'
+            self.root_skeleton = '/data/N-UCLA_MA_3D/skeletons_3d'
 
         # self.root_list = root_list
         self.view = []
@@ -156,10 +156,11 @@ class NUCLA_CrossView(Dataset):
             for name_sample in list_samples:
                 self.samples_list.append((view, name_sample))
         
-        # print('before train len ', len(self.samples_list))
-        # random.shuffle(self.samples_list)
-        # self.samples_list = self.samples_list[: len(self.samples_list)//2]
-        # print('after train len ', len(self.samples_list))
+        print('before train len ', len(self.samples_list))
+        random.seed(10)
+        random.shuffle(self.samples_list)
+        self.samples_list = self.samples_list[: len(self.samples_list)//2]
+        print('after train len ', len(self.samples_list), self.samples_list[::10])
 
         self.test_list= np.loadtxt(os.path.join(self.root_list, f"{self.test_view}_test.list"), dtype=str)
         temp = []
@@ -168,10 +169,11 @@ class NUCLA_CrossView(Dataset):
             if subject != 's05':
                 temp.append(item)
 
-        # print('before test len ', len(temp))
-        # random.shuffle(temp)
-        # temp = temp[: len(temp)//2]
-        # print('after train len ', len(temp))
+        print('before test len ', len(temp))
+        random.seed(10)
+        random.shuffle(temp)
+        temp = temp[: len(temp)//2]
+        print('after test len ', len(temp), temp[::10])
 
         if self.phase == 'test':
             self.samples_list = temp

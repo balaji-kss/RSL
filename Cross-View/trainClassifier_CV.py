@@ -3,7 +3,7 @@ from dataset.crossView_UCLA import *
 from torch.optim import lr_scheduler
 from modelZoo.BinaryCoding import *
 from testClassifier_CV import testing, getPlots
-import time 
+import time
 
 gpu_id = 0
 map_loc = "cuda:" + str(gpu_id)
@@ -103,22 +103,22 @@ LOSS_MSE = []
 LOSS_BI = []
 print('Experiment config(setup, clip, lam1, lam2, lr):', setup, clip, lam1, lam2, lr)
 # print('Experiment config(setup, clip, lam1, lam2, lr, lr_2):', setup, clip, Alpha, lam1, lam2, lr, lr_2)
-for epoch in range(1, Epoch+1):
+for epoch in range(0, Epoch+1):
     print('start training epoch:', epoch)
     start_time = time.time()
     lossVal = []
     lossCls = []
     lossBi = []
     lossMSE = []
+    count = 0
+    pred_cnt = 0
     for i, sample in enumerate(trainloader):
 
         # print('sample:', i)
         optimizer.zero_grad()
 
-
         skeletons = sample['input_skeletons']['normSkeleton'].float().cuda(gpu_id)
         input_images = sample['input_images'].float().cuda(gpu_id)
-
 
         gt_label = sample['action'].cuda(gpu_id)
         if clip == 'Single':
@@ -128,6 +128,7 @@ for epoch in range(1, Epoch+1):
         else:
             t = skeletons.shape[2]
             input_skeletons = skeletons.reshape(skeletons.shape[0]*skeletons.shape[1], t, -1) #bz,clip, T, 25, 2 --> bz, clip, T, 50
+
         'dy+cl:'
         actPred, output_skeletons = net(input_skeletons, t)
         # 'dy+bi+cl:'
@@ -135,19 +136,29 @@ for epoch in range(1, Epoch+1):
         #bi_gt = torch.zeros_like(binaryCode).cuda(gpu_id)
         if clip == 'Single':
             actPred = actPred
+            pred = torch.argmax(actPred, 1)
+
         else:
             actPred = actPred.reshape(skeletons.shape[0], skeletons.shape[1], num_class)
             actPred = torch.mean(actPred, 1)
+            pred = torch.argmax(actPred, 1)
 
-        loss = lam1 * Criterion(actPred, gt_label) + lam2 * mseLoss(output_skeletons, input_skeletons) \
+        cls_loss = Criterion(actPred, gt_label)
+        mse_loss = mseLoss(output_skeletons, input_skeletons)
+
+        loss = lam1 * cls_loss + lam2 * mse_loss \
                #+ Alpha*L1loss(binaryCode, bi_gt)
         loss.backward()
         optimizer.step()
         lossVal.append(loss.data.item())
-        lossCls.append(Criterion(actPred, gt_label).data.item())
-        lossMSE.append(mseLoss(output_skeletons, input_skeletons).data.item())
+        lossCls.append(cls_loss.data.item())
+        lossMSE.append(mse_loss.data.item())
         #lossBi.append(L1loss(binaryCode, bi_gt).data.item())
 
+        ## Train acc
+        correct = torch.eq(gt_label, pred).int()
+        count += gt_label.shape[0]
+        pred_cnt += torch.sum(correct).data.item()
 
     loss_val = np.mean(np.array(lossVal))
     LOSS.append(loss_val)
@@ -156,10 +167,10 @@ for epoch in range(1, Epoch+1):
     LOSS_BI.append(np.mean(np.array(lossBi)))
 
     end_time = time.time()
+    train_acc = pred_cnt/count
     time_per_epoch = (end_time - start_time)/60.0 #mins
 
-    print('epoch:', epoch, ' |time: ', np.round(time_per_epoch, 3), '|loss:', loss_val, '|cls:', np.mean(np.array(lossCls)), '|mse:', np.mean(np.array(lossMSE)))#, '|bi:', np.mean(np.array(lossBi)))
-
+    print('epoch:', epoch, ' |time: ', np.round(time_per_epoch, 3), '|loss:', loss_val, '|cls:', np.mean(np.array(lossCls)), '|mse:', np.mean(np.array(lossMSE)), '|acc:', train_acc)#, '|bi:', np.mean(np.array(lossBi)))
 
     scheduler.step()
     if epoch % 10 == 0:
