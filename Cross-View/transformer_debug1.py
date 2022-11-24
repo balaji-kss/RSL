@@ -11,18 +11,18 @@ map_loc = "cuda:" + str(gpu_id)
 # T = 36
 dataset = 'NUCLA'
 
-lam1 = 2 # cls loss
+lam1 = 10 # cls loss
 lam2 = 1 # mse loss
 
 N = 80 * 2
-Epoch = 500
+Epoch = 60
 # num_class = 10
 dataType = '2D'
 clip = 'Single'
 
 if clip == 'Single':
     num_workers = 8
-    bz = 1
+    bz = 32
 else:
     num_workers = 4
     bz = 8
@@ -32,7 +32,7 @@ T = 36 # input clip length
 fusion = False
 'initialized params'
 
-model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon/100.pth'
+model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2/100.pth'
 # model_path = '/home/balaji/Documents/code/RSL/Thesis/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_dyan_posfix/T36_fista01_openpose/100.pth'
 stateDict = torch.load(model_path, map_location=map_loc)['state_dict']
 Drr = stateDict['sparse_coding.rr'].float()
@@ -42,7 +42,7 @@ print('Drr ', Drr)
 print('Dtheta ', Dtheta)
 
 modelRoot = './ModelFile/crossView_NUCLA/'
-mode = '/tenc_dyan_exp2/'
+mode = '/tenc_dyan_exp2_f/'
 
 saveModel = modelRoot + clip + mode + 'T36_fista01_openpose/'
 if not os.path.exists(saveModel):
@@ -73,16 +73,16 @@ def load_pretrain_models(net, model_path):
     print('**** load pretrained tenc ****')
     net = load_pretrainedModel(tenc_state_dict, net)
 
-    # print('**** freeze transformer_encoder param/s ****')
-    # freeze_params(net.transformer_encoder)
+    print('**** freeze transformer_encoder params ****')
+    freeze_params(net.transformer_encoder)
 
     return net
 
 net = load_pretrain_models(net, model_path)
 
 net.train()
-lr1 = 5e-6
-lr2 = 5e-6
+lr1 = 1e-4
+lr2 = 1e-4
 lr3 = 1e-4
 
 'for dy+cl:'
@@ -93,7 +93,7 @@ optimizer = torch.optim.SGD([
                                 {'params':filter(lambda x: x.requires_grad, net.Classifier.parameters()), 'lr':lr3}
                                 ], weight_decay=0.001, momentum=0.9)
 
-scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[200, 400], gamma=0.4)
+scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[30, 50], gamma=0.1)
 Criterion = torch.nn.CrossEntropyLoss()
 mseLoss = torch.nn.MSELoss()
 L1loss = torch.nn.SmoothL1Loss()
