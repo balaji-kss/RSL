@@ -11,11 +11,11 @@ map_loc = "cuda:" + str(gpu_id)
 # T = 36
 dataset = 'NUCLA'
 
-lam1 = 10 # cls loss
+lam1 = 2 # cls loss
 lam2 = 1 # mse loss
-
+fistaLam = 0.2
 N = 80 * 2
-Epoch = 60
+Epoch = 300
 # num_class = 10
 dataType = '2D'
 clip = 'Single'
@@ -42,7 +42,7 @@ print('Drr ', Drr)
 print('Dtheta ', Dtheta)
 
 modelRoot = './ModelFile/crossView_NUCLA/'
-mode = '/tenc_dyan_exp2_f/'
+mode = '/tenc_dyan_exp2_lam0.2/'
 
 saveModel = modelRoot + clip + mode + 'T36_fista01_openpose/'
 if not os.path.exists(saveModel):
@@ -59,7 +59,7 @@ trainloader = DataLoader(trainSet, batch_size=bz, shuffle=True, num_workers=num_
 testSet = NUCLA_CrossView(root_list=path_list, dataType=dataType, clip=clip, phase='test', cam='2,1', T=T, setup=setup)
 testloader = DataLoader(testSet, batch_size=bz, shuffle=True, num_workers=num_workers)
 
-net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=0.1, gpu_id=gpu_id).cuda(gpu_id)
+net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=fistaLam, gpu_id=gpu_id).cuda(gpu_id)
 
 def freeze_params(model):
 
@@ -73,8 +73,8 @@ def load_pretrain_models(net, model_path):
     print('**** load pretrained tenc ****')
     net = load_pretrainedModel(tenc_state_dict, net)
 
-    print('**** freeze transformer_encoder params ****')
-    freeze_params(net.transformer_encoder)
+    # print('**** freeze transformer_encoder params ****')
+    # freeze_params(net.transformer_encoder)
 
     return net
 
@@ -83,7 +83,7 @@ net = load_pretrain_models(net, model_path)
 net.train()
 lr1 = 1e-4
 lr2 = 1e-4
-lr3 = 1e-4
+lr3 = 1e-3
 
 'for dy+cl:'
 # optimizer = torch.optim.SGD(filter(lambda x: x.requires_grad, net.parameters()), lr=lr, weight_decay=0.001, momentum=0.9)
@@ -93,7 +93,7 @@ optimizer = torch.optim.SGD([
                                 {'params':filter(lambda x: x.requires_grad, net.Classifier.parameters()), 'lr':lr3}
                                 ], weight_decay=0.001, momentum=0.9)
 
-scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[30, 50], gamma=0.1)
+scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[100, 200], gamma=0.4)
 Criterion = torch.nn.CrossEntropyLoss()
 mseLoss = torch.nn.MSELoss()
 L1loss = torch.nn.SmoothL1Loss()
@@ -103,7 +103,7 @@ ACC = []
 LOSS_CLS = []
 LOSS_MSE = []
 LOSS_BI = []
-print('Experiment config(setup, clip, lam1, lam2, lr1, lr2, lr3):', setup, clip, lam1, lam2, lr1, lr2, lr3)
+print('Experiment config(setup, clip, lam1, lam2, lr1, lr2, lr3, fistalam):', setup, clip, lam1, lam2, lr1, lr2, lr3, fistaLam)
 
 for epoch in range(0, Epoch+1):
     print('start training epoch:', epoch)

@@ -308,10 +308,13 @@ class DyanEncoder(nn.Module):
 
         reconst = torch.matmul(dic, sparseCode)
         return sparseCode, dic, reconst
+
     def forward2(self,x, T):
+        
         dic = creatRealDictionary(T, self.rr, self.theta, self.gpu_id)
         sparseCode = fista_new(dic, x, self.lam, 100, self.gpu_id)
         reconst = torch.matmul(dic, sparseCode)
+
         return sparseCode, dic, reconst
 
 
