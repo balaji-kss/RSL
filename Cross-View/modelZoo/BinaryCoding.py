@@ -276,7 +276,7 @@ class Tenc_SparseC_Cl(nn.Module):
 
         label = self.Classifier(sparseCode)
 
-        return label, Reconstruction, tenc_out
+        return label, sparseCode, Reconstruction, tenc_out
         
 class Dyan_Autoencoder(nn.Module):
     def __init__(self, Drr, Dtheta, dim, dataType, Inference, gpu_id, fistaLam):
@@ -292,9 +292,9 @@ class Dyan_Autoencoder(nn.Module):
 
         print('***** Dyan Autoencoder *****')
 
-        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=2048, num_heads=5, num_layers=1, dropout=0.1)
+        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=256, num_heads=5, num_layers=2, dropout=0.5)
         self.sparse_coding = DyanEncoder(self.Drr, self.Dtheta,  lam=fistaLam, gpu_id=self.gpu_id)
-        self.transformer_decoder = TransformerDecoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=2048, num_heads=5, num_layers=1, dropout=0.1)
+        self.transformer_decoder = TransformerDecoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=256, num_heads=5, num_layers=2, dropout=0.5)
 
     def get_tgt_mask(self, size, batch_size) -> torch.tensor:
 

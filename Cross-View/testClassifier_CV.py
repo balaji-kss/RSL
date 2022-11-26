@@ -81,13 +81,13 @@ def visualize_res(dataloader, net, gpu_id, clip):
                 input = skeleton.reshape(skeleton.shape[0]*skeleton.shape[1], t, -1)
 
             # print('input shape ', input.shape)
-            label, sparseC, dyan_out = net(input, t) # 'DY + CL'
-            dyan_inp = input
+            # label, sparseC, dyan_out = net(input, t) # 'DY + CL'
+            # dyan_inp = input
 
-            #label, sparseC, dyan_out, dyan_inp = net(input, t) # 'Tenc + DY + CL'
+            label, sparseC, dyan_out, dyan_inp = net(input, t) # 'Tenc + DY + CL'
             recon_loss = mseLoss(dyan_out, dyan_inp).data.item()
             global_recon_loss += recon_loss
-            sc_lst = torch.flatten(sparseC[:, :, 0]).cpu().numpy().tolist()
+            sc_lst = torch.flatten(sparseC[:, :, 0]).cpu().detach().numpy().tolist()
             sparseCs.append(sc_lst)
 
             if clip == 'Single':
@@ -110,14 +110,14 @@ def visualize_res(dataloader, net, gpu_id, clip):
             print('i ', i)            
             break
 
-        with open(txt_path, 'w+') as f:
-            for sparseC in sparseCs:
-                scs = ", ".join([str(sc) for sc in sparseC])
-                f.write(scs)
-                
-        Acc = pred_cnt/count
-        recon_loss_avg = global_recon_loss/count
-        print(' recon_loss_avg: ', np.round(recon_loss_avg, 5))
+    with open(txt_path, 'w+') as f:
+        for sparseC in sparseCs:
+            scs = ", ".join([str(sc) for sc in sparseC])
+            f.write(scs)
+            
+    Acc = pred_cnt/count
+    recon_loss_avg = global_recon_loss/count
+    print(' recon_loss_avg: ', np.round(recon_loss_avg, 5))
         
     return Acc
 
@@ -165,7 +165,7 @@ if __name__ == "__main__":
     N = 80*2
     T = 36
     num_class = 10
-    transformer = 0
+    transformer = 1
     dataset = 'NUCLA'
     clip = 'Single'
     setup = 'setup1' # v1,v2 train, v3 test;
@@ -177,7 +177,7 @@ if __name__ == "__main__":
     testloader = DataLoader(testSet, batch_size=32, shuffle=False, num_workers=num_workers)
 
     if transformer:
-        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_dyan_exp2/T36_fista01_openpose/300.pth'
+        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_dyan_exp3_lam0.1/T36_fista01_openpose/300.pth'
     else:
         model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/dyan_cl/T36_fista01_openpose/60.pth'
 

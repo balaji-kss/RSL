@@ -13,7 +13,7 @@ dataset = 'NUCLA'
 
 lam1 = 2 # cls loss
 lam2 = 1 # mse loss
-fistaLam = 0.2
+fistaLam = 0.3
 N = 80 * 2
 Epoch = 300
 # num_class = 10
@@ -34,15 +34,21 @@ fusion = False
 
 model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2/100.pth'
 # model_path = '/home/balaji/Documents/code/RSL/Thesis/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_dyan_posfix/T36_fista01_openpose/100.pth'
-stateDict = torch.load(model_path, map_location=map_loc)['state_dict']
-Drr = stateDict['sparse_coding.rr'].float()
-Dtheta = stateDict['sparse_coding.theta'].float()
+# stateDict = torch.load(model_path, map_location=map_loc)['state_dict']
+# Drr = stateDict['sparse_coding.rr'].float()
+# Dtheta = stateDict['sparse_coding.theta'].float()
+
+P, Pall = gridRing(N)
+Drr = abs(P)
+Drr = torch.from_numpy(Drr).float()
+Dtheta = np.angle(P)
+Dtheta = torch.from_numpy(Dtheta).float()
 
 print('Drr ', Drr)
 print('Dtheta ', Dtheta)
 
 modelRoot = './ModelFile/crossView_NUCLA/'
-mode = '/tenc_dyan_exp2_lam0.2/'
+mode = '/tenc_dyan_exp3_lam0.3/'
 
 saveModel = modelRoot + clip + mode + 'T36_fista01_openpose/'
 if not os.path.exists(saveModel):
@@ -114,6 +120,7 @@ for epoch in range(0, Epoch+1):
     lossMSE = []
     count = 0
     pred_cnt = 0
+    
     for i, sample in enumerate(trainloader):
 
         # print('sample:', i)

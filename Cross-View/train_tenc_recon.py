@@ -12,7 +12,7 @@ dataset = 'NUCLA'
 
 N = 80 * 2
 Epoch = 100
-
+fistaLam = 0.3
 dataType = '2D'
 clip = 'Single'
 
@@ -34,7 +34,7 @@ Dtheta = torch.from_numpy(Dtheta).float()
 
 modelRoot = './ModelFile/crossView_NUCLA/'
 
-saveModel = modelRoot + clip +  '/tenc_recon_n1/'
+saveModel = modelRoot + clip +  '/tenc_recon_n2_lam0.3/'
 if not os.path.exists(saveModel):
     os.makedirs(saveModel)
 print('model path:', saveModel)
@@ -52,7 +52,7 @@ testSet = NUCLA_CrossView(root_list=path_list, dataType=dataType, clip=clip, pha
 testloader = DataLoader(testSet, batch_size=bz, shuffle=True, num_workers=num_workers)
 
 net = Dyan_Autoencoder(Drr=Drr, Dtheta=Dtheta, dim=2, dataType=dataType, \
-                    Inference=True, gpu_id=gpu_id, fistaLam=0.1).cuda(gpu_id)
+                    Inference=True, gpu_id=gpu_id, fistaLam=fistaLam).cuda(gpu_id)
 
 net.train()
 lr = 1e-4
@@ -67,7 +67,7 @@ LOSS = []
 ACC = []
 lam1, lam2 = 1, 10
 
-print('Experiment config(setup, clip, lam1, lam2, lr, lr_2):', setup, clip, lam1, lam2, lr)
+print('Experiment config setup, clip, lam1, lam2, lr, lr_2, fistaLam: ', setup, clip, lam1, lam2, lr, fistaLam)
 
 for epoch in range(0, Epoch + 1):
     print('start training epoch:', epoch)
