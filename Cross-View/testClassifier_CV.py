@@ -6,17 +6,30 @@ import matplotlib.pyplot as plt
 
 mseLoss = torch.nn.MSELoss()
 
+def padding_mask(lengths, max_len=None):
+    """
+    Used to mask padded positions: creates a (batch_size, max_len) boolean mask from a tensor of sequence lengths,
+    where 1 means keep element at this position (time step)
+    """
+    batch_size = lengths.numel()
+    max_len = max_len or lengths.max_val()  # trick works because of overloading of 'or' operator for non-boolean types
+    return (torch.arange(0, max_len, device=lengths.device)
+            .type_as(lengths)
+            .repeat(batch_size, 1)
+            .lt(lengths.unsqueeze(1)))
+
 def testing(dataloader, net, gpu_id, clip):
     count = 0
     pred_cnt = 0
     global_recon_loss = 0
-
+    T = 36
     with torch.no_grad():
         for i, sample in enumerate(dataloader):
 
             skeleton = sample['input_skeletons']['normSkeleton'].float().cuda(gpu_id)
-
             y = sample['action'].cuda(gpu_id)
+            lengths = sample['lengths']
+            pad_mask = padding_mask(lengths, max_len=T).cuda(gpu_id) #(B, T)
 
             if clip == 'Single':
                 t = skeleton.shape[1]
@@ -30,7 +43,7 @@ def testing(dataloader, net, gpu_id, clip):
             #label, dyan_out = net(input, t) # 'DY + CL'
             #Edyan_inp = input
 
-            label, dyan_out, dyan_inp = net(input, t) # 'Tenc + DY + CL'
+            label, dyan_out, dyan_inp = net(input, t, pad_mask) # 'Tenc + DY + CL'
             recon_loss = mseLoss(dyan_out, dyan_inp).data.item()
             global_recon_loss += recon_loss
 
@@ -177,7 +190,7 @@ if __name__ == "__main__":
     testloader = DataLoader(testSet, batch_size=32, shuffle=False, num_workers=num_workers)
 
     if transformer:
-        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_dyan_exp3_lam0.1/T36_fista01_openpose/300.pth'
+        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_dyan_exp4_lam0.3_3/T36_fista01_openpose/300.pth'
     else:
         model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/dyan_cl/T36_fista01_openpose/60.pth'
 
@@ -187,7 +200,7 @@ if __name__ == "__main__":
     if transformer:
         Drr = stateDict['sparse_coding.rr'].float()
         Dtheta = stateDict['sparse_coding.theta'].float()
-        net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=0.1, gpu_id=gpu_id).cuda(gpu_id)
+        net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=0.3, gpu_id=gpu_id).cuda(gpu_id)
     else:
         Drr = stateDict['sparseCoding.rr'].float()
         Dtheta = stateDict['sparseCoding.theta'].float()

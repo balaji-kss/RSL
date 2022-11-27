@@ -364,7 +364,7 @@ class NUCLA_CrossView(Dataset):
                 imageSequence_input = imageSequence[ids_sample]
                 normSkeleton_input = normSkeleton[ids_sample,:,:]
 
-
+            length = skeleton_input.shape[0] 
             if skeleton_input.shape[0] != self.T:
                 skeleton_input, normSkeleton_input, imageSequence_input\
                     = self.paddingSeq(skeleton_input,normSkeleton_input, imageSequence_input)
@@ -378,7 +378,7 @@ class NUCLA_CrossView(Dataset):
         assert heatmap_to_use.shape[0] == self.T
         assert normSkeleton_input.shape[0] == self.T
         assert imageSequence_input.shape[0] == self.T
-        return heatmap_to_use, imageSequence_input, skeletonData
+        return heatmap_to_use, imageSequence_input, skeletonData, length
 
     def get_data_multiSeq(self, view, name_sample):
         overlap_rate = 0.7
@@ -450,14 +450,14 @@ class NUCLA_CrossView(Dataset):
             view, name_sample = self.samples_list[index]
 
         if self.clip == 'Single':
-            heat_maps, images, skeletons = self.get_data(view, name_sample)
+            heat_maps, images, skeletons, lengths = self.get_data(view, name_sample)
 
         else:
             heat_maps, images, skeletons = self.get_data_multiSeq(view, name_sample)
 
         label_action = self.action_list[name_sample[:3]]
         dicts = {'heat': heat_maps, 'input_images': images, 'input_skeletons': skeletons,
-                 'action': label_action, 'sample_name':name_sample}
+                 'action': label_action, 'sample_name':name_sample, 'lengths':lengths}
 
         return dicts
 

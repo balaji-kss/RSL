@@ -5,6 +5,18 @@ from modelZoo.BinaryCoding import *
 from testClassifier_CV import testing
 import time 
 
+def padding_mask(lengths, max_len=None):
+    """
+    Used to mask padded positions: creates a (batch_size, max_len) boolean mask from a tensor of sequence lengths,
+    where 1 means keep element at this position (time step)
+    """
+    batch_size = lengths.numel()
+    max_len = max_len or lengths.max_val()  # trick works because of overloading of 'or' operator for non-boolean types
+    return (torch.arange(0, max_len, device=lengths.device)
+            .type_as(lengths)
+            .repeat(batch_size, 1)
+            .lt(lengths.unsqueeze(1)))
+
 gpu_id = 0
 map_loc = "cuda:" + str(gpu_id)
 
@@ -13,7 +25,7 @@ dataset = 'NUCLA'
 
 lam1 = 2 # cls loss
 lam2 = 1 # mse loss
-fistaLam = 0.3
+fistaLam = 0.1
 N = 80 * 2
 Epoch = 300
 # num_class = 10
@@ -48,7 +60,7 @@ print('Drr ', Drr)
 print('Dtheta ', Dtheta)
 
 modelRoot = './ModelFile/crossView_NUCLA/'
-mode = '/tenc_dyan_exp3_lam0.3/'
+mode = '/tenc_dyan_exp6_lam0.1/'
 
 saveModel = modelRoot + clip + mode + 'T36_fista01_openpose/'
 if not os.path.exists(saveModel):
@@ -129,6 +141,8 @@ for epoch in range(0, Epoch+1):
         skeletons = sample['input_skeletons']['normSkeleton'].float().cuda(gpu_id)
         input_images = sample['input_images'].float().cuda(gpu_id)
         gt_label = sample['action'].cuda(gpu_id)
+        lengths = sample['lengths']
+        pad_mask = padding_mask(lengths, max_len=T).cuda(gpu_id) #(B, T)
 
         if clip == 'Single':
             t = skeletons.shape[1]
@@ -140,7 +154,7 @@ for epoch in range(0, Epoch+1):
 
         'dy+cl:'
         # print('input_skeletons shape ', input_skeletons.shape) #(32, 36, 50)
-        actPred, output_skeletons, dyan_input = net(input_skeletons, t)
+        actPred, output_skeletons, dyan_input = net(input_skeletons, t, pad_mask)
         
         if clip == 'Single':
             actPred = actPred

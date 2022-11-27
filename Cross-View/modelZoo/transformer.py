@@ -49,6 +49,8 @@ class TransformerEncoder(nn.Module):
         self.pos_encoder = PositionalEncoding(self.embed_proj_dim, dropout=self.dropout)
         self.encoder_layer = nn.TransformerEncoderLayer(d_model=self.embed_proj_dim, nhead=self.num_heads, dim_feedforward=self.ff_dim, activation=self.activation, dropout=self.dropout, batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=self.num_layers)
+        self.act = nn.ReLU()
+        self.dropout1 = nn.Dropout(p=dropout)
 
         self.print_params()
         
@@ -60,14 +62,16 @@ class TransformerEncoder(nn.Module):
         print('num_layers: ', self.num_layers)
         print('dropout: ', self.dropout)
 
-    def forward(self, x):
+    def forward(self, x, padding_masks):
         
         if self.input_layer:
             x = self.input_layer(x)
 
         pe_out = self.pos_encoder(x)
 
-        tenc_out = self.transformer_encoder(pe_out)
+        tenc_out = self.transformer_encoder(pe_out, src_key_padding_mask=~padding_masks)
+        tenc_out = self.act(tenc_out)
+        tenc_out = self.dropout1(tenc_out)
 
         if self.output_layer:
             tenc_out = self.output_layer(tenc_out)
