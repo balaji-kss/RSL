@@ -5,18 +5,6 @@ from modelZoo.BinaryCoding import *
 from testClassifier_CV import testing
 import time 
 
-def padding_mask(lengths, max_len=None):
-    """
-    Used to mask padded positions: creates a (batch_size, max_len) boolean mask from a tensor of sequence lengths,
-    where 1 means keep element at this position (time step)
-    """
-    batch_size = lengths.numel()
-    max_len = max_len or lengths.max_val()  # trick works because of overloading of 'or' operator for non-boolean types
-    return (torch.arange(0, max_len, device=lengths.device)
-            .type_as(lengths)
-            .repeat(batch_size, 1)
-            .lt(lengths.unsqueeze(1)))
-
 gpu_id = 0
 map_loc = "cuda:" + str(gpu_id)
 
@@ -60,7 +48,7 @@ print('Drr ', Drr)
 print('Dtheta ', Dtheta)
 
 modelRoot = './ModelFile/crossView_NUCLA/'
-mode = '/tenc_dyan_exp6_lam0.1/'
+mode = '/tenc_exp8/'
 
 saveModel = modelRoot + clip + mode + 'T36_fista01_openpose/'
 if not os.path.exists(saveModel):
@@ -77,7 +65,8 @@ trainloader = DataLoader(trainSet, batch_size=bz, shuffle=True, num_workers=num_
 testSet = NUCLA_CrossView(root_list=path_list, dataType=dataType, clip=clip, phase='test', cam='2,1', T=T, setup=setup)
 testloader = DataLoader(testSet, batch_size=bz, shuffle=True, num_workers=num_workers)
 
-net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=fistaLam, gpu_id=gpu_id).cuda(gpu_id)
+#net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=fistaLam, gpu_id=gpu_id).cuda(gpu_id)
+net = Tenc_Cl(num_class=num_class, gpu_id=gpu_id).cuda(gpu_id)
 
 def freeze_params(model):
 
@@ -98,18 +87,18 @@ def load_pretrain_models(net, model_path):
 
 net = load_pretrain_models(net, model_path)
 
-net.train()
+
 lr1 = 1e-4
 lr2 = 1e-4
 lr3 = 1e-3
 
 'for dy+cl:'
-# optimizer = torch.optim.SGD(filter(lambda x: x.requires_grad, net.parameters()), lr=lr, weight_decay=0.001, momentum=0.9)
-optimizer = torch.optim.SGD([
-                                {'params':filter(lambda x: x.requires_grad, net.transformer_encoder.parameters()), 'lr':lr1},
-                                {'params':filter(lambda x: x.requires_grad, net.sparse_coding.parameters()), 'lr':lr2},
-                                {'params':filter(lambda x: x.requires_grad, net.Classifier.parameters()), 'lr':lr3}
-                                ], weight_decay=0.001, momentum=0.9)
+optimizer = torch.optim.SGD(filter(lambda x: x.requires_grad, net.parameters()), lr=lr2, weight_decay=0.001, momentum=0.9)
+# optimizer = torch.optim.SGD([
+#                                 {'params':filter(lambda x: x.requires_grad, net.transformer_encoder.parameters()), 'lr':lr1},
+#                                 {'params':filter(lambda x: x.requires_grad, net.sparse_coding.parameters()), 'lr':lr2},
+#                                 {'params':filter(lambda x: x.requires_grad, net.Classifier.parameters()), 'lr':lr3}
+#                                 ], weight_decay=0.001, momentum=0.9)
 
 scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[100, 200], gamma=0.4)
 Criterion = torch.nn.CrossEntropyLoss()
@@ -132,7 +121,7 @@ for epoch in range(0, Epoch+1):
     lossMSE = []
     count = 0
     pred_cnt = 0
-    
+    net.train()
     for i, sample in enumerate(trainloader):
 
         # print('sample:', i)
@@ -141,8 +130,7 @@ for epoch in range(0, Epoch+1):
         skeletons = sample['input_skeletons']['normSkeleton'].float().cuda(gpu_id)
         input_images = sample['input_images'].float().cuda(gpu_id)
         gt_label = sample['action'].cuda(gpu_id)
-        lengths = sample['lengths']
-        pad_mask = padding_mask(lengths, max_len=T).cuda(gpu_id) #(B, T)
+        lengths = sample['lengths'].cuda(gpu_id)
 
         if clip == 'Single':
             t = skeletons.shape[1]
@@ -154,7 +142,7 @@ for epoch in range(0, Epoch+1):
 
         'dy+cl:'
         # print('input_skeletons shape ', input_skeletons.shape) #(32, 36, 50)
-        actPred, output_skeletons, dyan_input = net(input_skeletons, t, pad_mask)
+        actPred, output_skeletons, dyan_input = net(input_skeletons, t, lengths)
         
         if clip == 'Single':
             actPred = actPred
@@ -165,14 +153,15 @@ for epoch in range(0, Epoch+1):
             pred = torch.argmax(actPred, 1)
 
         cls_loss = Criterion(actPred, gt_label)
-        mse_loss = mseLoss(output_skeletons, dyan_input)
+        # mse_loss = mseLoss(output_skeletons, dyan_input)
+        mse_loss = 0.0
         loss = lam1 * cls_loss + lam2 * mse_loss
         loss.backward()
         optimizer.step()
 
         lossVal.append(loss.data.item())
         lossCls.append(cls_loss.data.item())
-        lossMSE.append(mse_loss.data.item())
+        #lossMSE.append(mse_loss.data.item())
 
         ## Train acc
         correct = torch.eq(gt_label, pred).int()
@@ -189,7 +178,7 @@ for epoch in range(0, Epoch+1):
     train_acc = pred_cnt/count
     time_per_epoch = (end_time - start_time)/60.0 #mins
 
-    print('epoch:', epoch, ' |time: ', np.round(time_per_epoch, 3), '|loss:', loss_val, '|cls:', np.mean(np.array(lossCls)), '|mse:', np.mean(np.array(lossMSE)), '|acc:', train_acc)
+    print('epoch:', epoch, ' |time: ', np.round(time_per_epoch, 3), '|loss:', loss_val, '|cls:', np.mean(np.array(lossCls)), '|mse:', np.mean(np.array(0.0)), '|acc:', train_acc)
 
     scheduler.step()
     if epoch % 5 == 0:

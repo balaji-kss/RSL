@@ -6,30 +6,19 @@ import matplotlib.pyplot as plt
 
 mseLoss = torch.nn.MSELoss()
 
-def padding_mask(lengths, max_len=None):
-    """
-    Used to mask padded positions: creates a (batch_size, max_len) boolean mask from a tensor of sequence lengths,
-    where 1 means keep element at this position (time step)
-    """
-    batch_size = lengths.numel()
-    max_len = max_len or lengths.max_val()  # trick works because of overloading of 'or' operator for non-boolean types
-    return (torch.arange(0, max_len, device=lengths.device)
-            .type_as(lengths)
-            .repeat(batch_size, 1)
-            .lt(lengths.unsqueeze(1)))
-
 def testing(dataloader, net, gpu_id, clip):
     count = 0
     pred_cnt = 0
     global_recon_loss = 0
     T = 36
+
+    net.eval()
     with torch.no_grad():
         for i, sample in enumerate(dataloader):
 
             skeleton = sample['input_skeletons']['normSkeleton'].float().cuda(gpu_id)
             y = sample['action'].cuda(gpu_id)
-            lengths = sample['lengths']
-            pad_mask = padding_mask(lengths, max_len=T).cuda(gpu_id) #(B, T)
+            lengths = sample['lengths'].cuda(gpu_id)
 
             if clip == 'Single':
                 t = skeleton.shape[1]
@@ -38,13 +27,15 @@ def testing(dataloader, net, gpu_id, clip):
             else:
                 t = skeleton.shape[2]
                 input = skeleton.reshape(skeleton.shape[0]*skeleton.shape[1], t, -1)
-
+		
+            # print('lengths', lengths)
             # print('input shape ', input.shape)
             #label, dyan_out = net(input, t) # 'DY + CL'
             #Edyan_inp = input
 
-            label, dyan_out, dyan_inp = net(input, t, pad_mask) # 'Tenc + DY + CL'
-            recon_loss = mseLoss(dyan_out, dyan_inp).data.item()
+            label, dyan_out, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL'
+            #recon_loss = mseLoss(dyan_out, dyan_inp).data.item()
+            recon_loss = 0.0
             global_recon_loss += recon_loss
 
             if clip == 'Single':
@@ -78,12 +69,14 @@ def visualize_res(dataloader, net, gpu_id, clip):
     global_recon_loss = 0
     sparseCs = []
 
+    net.eval()
     with torch.no_grad():
         for i, sample in enumerate(dataloader):
 
             skeleton = sample['input_skeletons']['normSkeleton'].float().cuda(gpu_id)
-
+        
             y = sample['action'].cuda(gpu_id)
+            lengths = sample['lengths'].cuda(gpu_id)
 
             if clip == 'Single':
                 t = skeleton.shape[1]
@@ -97,7 +90,7 @@ def visualize_res(dataloader, net, gpu_id, clip):
             # label, sparseC, dyan_out = net(input, t) # 'DY + CL'
             # dyan_inp = input
 
-            label, sparseC, dyan_out, dyan_inp = net(input, t) # 'Tenc + DY + CL'
+            label, sparseC, dyan_out, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL'
             recon_loss = mseLoss(dyan_out, dyan_inp).data.item()
             global_recon_loss += recon_loss
             sc_lst = torch.flatten(sparseC[:, :, 0]).cpu().detach().numpy().tolist()
@@ -190,7 +183,7 @@ if __name__ == "__main__":
     testloader = DataLoader(testSet, batch_size=32, shuffle=False, num_workers=num_workers)
 
     if transformer:
-        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_dyan_exp4_lam0.3_3/T36_fista01_openpose/300.pth'
+        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_dyan_exp6_lam0.1/T36_fista01_openpose/300.pth'
     else:
         model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/dyan_cl/T36_fista01_openpose/60.pth'
 
@@ -209,6 +202,6 @@ if __name__ == "__main__":
                                         
     net.load_state_dict(stateDict)
 
-    #Acc = testing(testloader, net, gpu_id, clip)
-    Acc = visualize_res(testloader, net, gpu_id, clip)
+    Acc = testing(testloader, net, gpu_id, clip)
+    #Acc = visualize_res(testloader, net, gpu_id, clip)
     print('Acc:%.4f' % Acc)

@@ -39,6 +39,7 @@ class TransformerEncoder(nn.Module):
         self.num_layers = num_layers
      
         if self.embed_proj_dim:
+            print('input output layer present')
             self.input_layer = nn.Linear(self.embed_dim, self.embed_proj_dim)
             self.output_layer = nn.Linear(self.embed_proj_dim, self.embed_dim)
         else:
@@ -51,7 +52,6 @@ class TransformerEncoder(nn.Module):
         self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=self.num_layers)
         self.act = nn.ReLU()
         self.dropout1 = nn.Dropout(p=dropout)
-
         self.print_params()
         
     def print_params(self):
@@ -62,14 +62,14 @@ class TransformerEncoder(nn.Module):
         print('num_layers: ', self.num_layers)
         print('dropout: ', self.dropout)
 
-    def forward(self, x, padding_masks):
+    def forward(self, x, mask):
         
         if self.input_layer:
             x = self.input_layer(x)
 
         pe_out = self.pos_encoder(x)
 
-        tenc_out = self.transformer_encoder(pe_out, src_key_padding_mask=~padding_masks)
+        tenc_out = self.transformer_encoder(pe_out, src_key_padding_mask=~mask)
         tenc_out = self.act(tenc_out)
         tenc_out = self.dropout1(tenc_out)
 
@@ -77,7 +77,6 @@ class TransformerEncoder(nn.Module):
             tenc_out = self.output_layer(tenc_out)
 
         return tenc_out
-
 
 class TransformerDecoder(nn.Module):
     

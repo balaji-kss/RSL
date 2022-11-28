@@ -183,15 +183,77 @@ class classificationGlobal(nn.Module):
             elif isinstance(m, nn.Linear):
                 torch.nn.init.xavier_uniform_(m.weight, gain=1)
 
+    def forward(self,x):
+        inp = x
+        bz = inp.shape[0]
+
+        x = self.relu(self.bn1(self.conv1(x)))
+        x = self.relu(self.bn2(self.conv2(x)))
+        x_gl = self.pool(self.relu(self.bn3(self.conv3(x))))
+        x_new = torch.cat((x_gl.repeat(1,1,inp.shape[-1]),inp),1).reshape(bz,1024+self.Npole,25,2)
+        x_out = self.relu(self.bn4(self.conv4(x_new)))
+        x_out = self.relu(self.bn5(self.conv5(x_out)))
+        x_out = self.relu(self.bn6(self.conv6(x_out)))
+
+        'MLP'
+        x_out = x_out.view(bz,-1)  #flatten
+        x_out = self.relu(self.fc(x_out))
+        x_out = self.relu(self.fc2(x_out))
+        x_out = self.relu(self.fc3(x_out))
+
+        out = self.cls(x_out)
+
+        return out
+
+class classificationTenc(nn.Module):
+    def __init__(self, num_class, Npole, dataType):
+        super(classificationTenc, self).__init__()
+        self.num_class = num_class
+        self.Npole = Npole
+        self.dataType = dataType
+        self.conv1 = nn.Conv1d(self.Npole, 128, 1, stride=1, padding=0)
+        self.bn1 = nn.BatchNorm1d(num_features=128, eps=1e-05, affine=True)
+
+        self.conv2 = nn.Conv1d(128, 128, 1, stride=1, padding=0)
+        self.bn2 = nn.BatchNorm1d(num_features=128, eps=1e-5, affine=True)
+
+        self.conv3 = nn.Conv1d(128, 256, 3, stride=2, padding=1)
+        self.bn3 = nn.BatchNorm1d(num_features=256, eps=1e-5, affine=True)
+
+        self.pool = nn.AvgPool1d(kernel_size=(25))
+
+        self.conv4 = nn.Conv2d(self.Npole + 256, 256, (3, 1), stride=1, padding=(0, 1))
+        self.bn4 = nn.BatchNorm2d(num_features=256, eps=1e-5, affine=True)
+
+        self.conv5 = nn.Conv2d(256, 128, (3, 1), stride=1, padding=(0, 1))
+        self.bn5 = nn.BatchNorm2d(num_features=128, eps=1e-5, affine=True)
+
+        self.conv6 = nn.Conv2d(128, 128, (3, 3), stride=2, padding=0)
+        self.bn6 = nn.BatchNorm2d(num_features=128, eps=1e-5, affine=True)
+
+        self.fc = nn.Linear(128*10*2, 256)
+        self.fc2 = nn.Linear(256, 128)
+        self.fc3 = nn.Linear(128, 64)
+        self.cls = nn.Linear(64, self.num_class)
+
+        self.relu = nn.LeakyReLU()
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+
+            elif isinstance(m, nn.Linear):
+                torch.nn.init.xavier_uniform_(m.weight, gain=1)
 
     def forward(self,x):
+
         inp = x
         bz = inp.shape[0]
         x = self.relu(self.bn1(self.conv1(x)))
         x = self.relu(self.bn2(self.conv2(x)))
         x_gl = self.pool(self.relu(self.bn3(self.conv3(x))))
 
-        x_new = torch.cat((x_gl.repeat(1,1,inp.shape[-1]),inp),1).reshape(bz,1024+self.Npole,25,2)
+        x_new = torch.cat((x_gl.repeat(1,1,inp.shape[-1]),inp),1).reshape(bz,256+self.Npole,25,2)
 
         x_out = self.relu(self.bn4(self.conv4(x_new)))
         x_out = self.relu(self.bn5(self.conv5(x_out)))
@@ -263,13 +325,27 @@ class Tenc_SparseC_Cl(nn.Module):
         
         self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=25*2, ff_dim=2048, num_heads=5, num_layers=2, dropout=0.1)
 
-        self.Classifier = classificationGlobal(num_class=self.num_class, Npole=Npole, dataType=self.dataType)
+        self.Classifier = classificationTenc(num_class=self.num_class, Npole=Npole, dataType=self.dataType)
 
         self.sparse_coding = DyanEncoder(self.Drr, self.Dtheta,lam=self.fistaLam, gpu_id=self.gpu_id)
 
-    def forward(self, x, T, src_key_padding_mask):
-    
-        tenc_out = self.transformer_encoder(x, src_key_padding_mask)
+    def key_padding_mask(self, lengths, max_len=None):
+        """
+        Used to mask padded positions: creates a (batch_size, max_len) boolean mask from a tensor of sequence lengths,
+        where 1 means keep element at this position (time step)
+        """
+        batch_size = lengths.numel()
+        max_len = max_len or lengths.max_val()  # trick works because of overloading of 'or' operator for non-boolean types
+        return (torch.arange(0, max_len, device=lengths.device)
+                .type_as(lengths)
+                .repeat(batch_size, 1)
+                .lt(lengths.unsqueeze(1)))
+
+    def forward(self, x, T, lengths):
+
+        padding_mask = self.key_padding_mask(lengths, max_len=T)
+
+        tenc_out = self.transformer_encoder(x, padding_mask)
 
         sparseCode, Dict, Reconstruction  = self.sparse_coding.forward2(tenc_out, T) # w.o. RH
 
@@ -277,6 +353,46 @@ class Tenc_SparseC_Cl(nn.Module):
 
         return label, Reconstruction, tenc_out
         
+class Tenc_Cl(nn.Module):
+    def __init__(self, num_class, gpu_id):
+        super(Tenc_Cl, self).__init__()
+        self.num_class = num_class
+        
+        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=25*2, ff_dim=2048, num_heads=5, num_layers=8, dropout=0.1)
+
+        self.fc1 = nn.Linear(36*50, 1024)
+        self.fc2 = nn.Linear(1024, 512)
+        self.fc3 = nn.Linear(512, 128)
+        self.cls = nn.Linear(128, self.num_class)
+        self.relu = nn.LeakyReLU()
+
+    def key_padding_mask(self, lengths, max_len=None):
+        """
+        Used to mask padded positions: creates a (batch_size, max_len) boolean mask from a tensor of sequence lengths,
+        where 1 means keep element at this position (time step)
+        """
+        batch_size = lengths.numel()
+        max_len = max_len or lengths.max_val()  # trick works because of overloading of 'or' operator for non-boolean types
+        return (torch.arange(0, max_len, device=lengths.device)
+                .type_as(lengths)
+                .repeat(batch_size, 1)
+                .lt(lengths.unsqueeze(1)))
+
+    def forward(self, x, T, lengths):
+
+        padding_mask = self.key_padding_mask(lengths, max_len=T)
+
+        tenc_out = self.transformer_encoder(x, padding_mask)
+
+        x_out = tenc_out.view(tenc_out.shape[0],-1)  #flatten
+        x_out = self.relu(self.fc1(x_out))
+        x_out = self.relu(self.fc2(x_out))
+        x_out = self.relu(self.fc3(x_out))
+
+        out = self.cls(x_out)
+
+        return out, out, tenc_out
+
 class Dyan_Autoencoder(nn.Module):
     def __init__(self, Drr, Dtheta, dim, dataType, Inference, gpu_id, fistaLam):
         super(Dyan_Autoencoder, self).__init__()
