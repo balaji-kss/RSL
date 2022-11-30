@@ -62,16 +62,19 @@ class TransformerEncoder(nn.Module):
         print('num_layers: ', self.num_layers)
         print('dropout: ', self.dropout)
 
-    def forward(self, x, mask):
+    def forward(self, x, mask=None):
         
         if self.input_layer:
             x = self.input_layer(x)
 
         pe_out = self.pos_encoder(x)
 
-        tenc_out = self.transformer_encoder(pe_out, src_key_padding_mask=~mask)
-        tenc_out = self.act(tenc_out)
-        tenc_out = self.dropout1(tenc_out)
+        if mask is not None:
+            tenc_out = self.transformer_encoder(pe_out, src_key_padding_mask=~mask)
+        else:
+            tenc_out = self.transformer_encoder(pe_out)
+        # tenc_out = self.act(tenc_out)
+        # tenc_out = self.dropout1(tenc_out)
 
         if self.output_layer:
             tenc_out = self.output_layer(tenc_out)

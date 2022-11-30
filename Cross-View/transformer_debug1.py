@@ -153,8 +153,7 @@ for epoch in range(0, Epoch+1):
             pred = torch.argmax(actPred, 1)
 
         cls_loss = Criterion(actPred, gt_label)
-        # mse_loss = mseLoss(output_skeletons, dyan_input)
-        mse_loss = 0.0
+        mse_loss = mseLoss(output_skeletons, dyan_input)
         loss = lam1 * cls_loss + lam2 * mse_loss
         loss.backward()
         optimizer.step()

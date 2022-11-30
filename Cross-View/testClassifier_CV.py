@@ -62,14 +62,14 @@ def testing(dataloader, net, gpu_id, clip):
         
     return Acc
 
-def visualize_res(dataloader, net, gpu_id, clip):
+def visualize_cls(dataloader, net, gpu_id, clip):
 
     count = 0
     pred_cnt = 0
     global_recon_loss = 0
-    sparseCs = []
+    sparseCs, recons, dyan_inps, net_inps = [], [], [], []
 
-    net.eval()
+    #net.eval()
     with torch.no_grad():
         for i, sample in enumerate(dataloader):
 
@@ -90,42 +90,128 @@ def visualize_res(dataloader, net, gpu_id, clip):
             # label, sparseC, dyan_out = net(input, t) # 'DY + CL'
             # dyan_inp = input
 
-            label, sparseC, dyan_out, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL'
-            recon_loss = mseLoss(dyan_out, dyan_inp).data.item()
+            #label, sparseC, recon, dyan_inp = net(input, t) # 'Tenc + DY + CL'
+
+            recon, dyan_inp, tdec_out = net(input, t)
+            
+            recon_loss = mseLoss(recon, dyan_inp).data.item()
             global_recon_loss += recon_loss
-            sc_lst = torch.flatten(sparseC[:, :, 0]).cpu().detach().numpy().tolist()
+            sc_lst = torch.flatten(tdec_out[:, :, :]).cpu().detach().numpy().tolist()
+            recon_lst = torch.flatten(recon[:, :, :]).cpu().detach().numpy().tolist()
+            dyan_inp_lst = torch.flatten(dyan_inp[:, :, :]).cpu().detach().numpy().tolist()
+            inp_lst = torch.flatten(input[:, :, :]).cpu().detach().numpy().tolist()
+            
             sparseCs.append(sc_lst)
+            recons.append(recon_lst)
+            dyan_inps.append(dyan_inp_lst)
+            net_inps.append(inp_lst)
 
-            if clip == 'Single':
-                label = label
-                pred = torch.argmax(label, 1)
+            # if clip == 'Single':
+            #     label = label
+            #     pred = torch.argmax(label, 1)
 
-            else:
-                num_class = label.shape[-1]
-                label = label.reshape(skeleton.shape[0], skeleton.shape[1], num_class)
+            # else:
+            #     num_class = label.shape[-1]
+            #     label = label.reshape(skeleton.shape[0], skeleton.shape[1], num_class)
 
-                label = torch.mean(label,1)
-                pred = torch.argmax(label,1)
+            #     label = torch.mean(label,1)
+            #     pred = torch.argmax(label,1)
 
-            correct = torch.eq(y, pred).int()
+            # correct = torch.eq(y, pred).int()
             count += y.shape[0]
-            pred_cnt += torch.sum(correct).data.item()
+            # pred_cnt += torch.sum(correct).data.item()
 
             recon_loss_avg = global_recon_loss/count
             #print('recon_loss: ', np.round(recon_loss, 5), ' recon_loss_avg: ', np.round(recon_loss_avg, 5))
             print('i ', i)            
             break
 
-    with open(txt_path, 'w+') as f:
+    with open(sc_txt_path, 'w+') as f:
         for sparseC in sparseCs:
             scs = ", ".join([str(sc) for sc in sparseC])
             f.write(scs)
-            
+    
+    with open(inp_txt_path, 'w+') as f:
+        for dyan_inp in dyan_inps:
+            inps = ", ".join([str(inp) for inp in dyan_inp])
+            f.write(inps)
+    
+    with open(recon_txt_path, 'w+') as f:
+        for recon in recons:
+            recs = ", ".join([str(rec) for rec in recon])
+            f.write(recs)
+
+    with open(netinp_txt_path, 'w+') as f:
+        for net_inp in net_inps:
+            netis = ", ".join([str(neti) for neti in net_inp])
+            f.write(netis)
+
     Acc = pred_cnt/count
     recon_loss_avg = global_recon_loss/count
     print(' recon_loss_avg: ', np.round(recon_loss_avg, 5))
         
     return Acc
+
+def write_lst(txt_path, lsts):
+
+    with open(txt_path, 'w+') as f:
+        for lst in lsts:
+            els = ", ".join([str(el) for el in lst])
+            f.write(els)
+
+def visualize_reconstruct(dataloader, net, gpu_id, clip):
+
+    count = 0
+    global_recon_loss = 0
+    xs, ys, x_s, y_s = [], [], [], []
+
+    #net.eval()
+    with torch.no_grad():
+        for i, sample in enumerate(dataloader):
+
+            skeleton = sample['input_skeletons']['normSkeleton'].float().cuda(gpu_id)
+        
+            y = sample['action'].cuda(gpu_id)
+            lengths = sample['lengths'].cuda(gpu_id)
+
+            if clip == 'Single':
+                t = skeleton.shape[1]
+                input = skeleton.reshape(skeleton.shape[0], t, -1)
+
+            else:
+                t = skeleton.shape[2]
+                input = skeleton.reshape(skeleton.shape[0]*skeleton.shape[1], t, -1)
+
+            recon, dyan_inp, tdec_out = net(input, t)
+            
+            recon_loss = mseLoss(recon, dyan_inp).data.item()
+            global_recon_loss += recon_loss
+
+            xlst = torch.flatten(input).cpu().detach().numpy().tolist()
+            ylst = torch.flatten(dyan_inp).cpu().detach().numpy().tolist()
+            y_lst = torch.flatten(recon).cpu().detach().numpy().tolist()
+            x_lst = torch.flatten(tdec_out).cpu().detach().numpy().tolist()
+            
+            xs.append(xlst)
+            ys.append(ylst)
+            y_s.append(y_lst)
+            x_s.append(x_lst)
+
+            count += y.shape[0]
+
+            recon_loss_avg = global_recon_loss/count
+            print('i ', i)            
+            break
+
+    write_lst(xtxt_path, xs)
+    write_lst(ytxt_path, ys)
+    write_lst(x_txt_path, x_s)
+    write_lst(y_txt_path, y_s)
+
+    recon_loss_avg = global_recon_loss/count
+    print(' recon_loss_avg: ', np.round(recon_loss_avg, 5))
+    
+    return 
 
 def getPlots(LOSS,LOSS_CLS, LOSS_MSE, LOSS_BI, ACC, fig_name):
     'x-axis: number of epochs'
@@ -166,12 +252,13 @@ def getPlots(LOSS,LOSS_CLS, LOSS_MSE, LOSS_BI, ACC, fig_name):
 
 if __name__ == "__main__":
 
-    gpu_id = 1
+    gpu_id = 0
     num_workers = 4
     N = 80*2
     T = 36
     num_class = 10
-    transformer = 1
+    transformer = 0
+    recon = 1
     dataset = 'NUCLA'
     clip = 'Single'
     setup = 'setup1' # v1,v2 train, v3 test;
@@ -182,18 +269,29 @@ if __name__ == "__main__":
     testSet = NUCLA_CrossView(root_list=path_list, dataType=dataType, clip=clip, phase='test', cam='2,1', T=T, setup=setup)
     testloader = DataLoader(testSet, batch_size=32, shuffle=False, num_workers=num_workers)
 
-    if transformer:
-        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_dyan_exp6_lam0.1/T36_fista01_openpose/300.pth'
+    if recon:
+        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon/100.pth'
+    elif transformer:
+        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_dyan_exp5_lam0.5/T36_fista01_openpose/200.pth'
     else:
         model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/dyan_cl/T36_fista01_openpose/60.pth'
 
-    txt_path = os.path.join(model_path.rsplit('/', 1)[0], 'sc.txt')
+    sc_txt_path = os.path.join(model_path.rsplit('/', 1)[0], 'sc.txt')
+    xtxt_path = os.path.join(model_path.rsplit('/', 1)[0], 'skel.txt')
+    ytxt_path = os.path.join(model_path.rsplit('/', 1)[0], 'dyan_inp.txt')
+    y_txt_path = os.path.join(model_path.rsplit('/', 1)[0], 'recon.txt')
+    x_txt_path = os.path.join(model_path.rsplit('/', 1)[0], 'tdec_out.txt')
     stateDict = torch.load(model_path, map_location=map_loc)['state_dict']
-    
-    if transformer:
+
+    if recon:
         Drr = stateDict['sparse_coding.rr'].float()
         Dtheta = stateDict['sparse_coding.theta'].float()
-        net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=0.3, gpu_id=gpu_id).cuda(gpu_id)
+        net = Dyan_Autoencoder(Drr=Drr, Dtheta=Dtheta, dim=2, dataType=dataType, \
+                    Inference=True, gpu_id=gpu_id, fistaLam=0.1).cuda(gpu_id)
+    elif transformer:
+        Drr = stateDict['sparse_coding.rr'].float()
+        Dtheta = stateDict['sparse_coding.theta'].float()
+        net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=0.5, gpu_id=gpu_id).cuda(gpu_id)
     else:
         Drr = stateDict['sparseCoding.rr'].float()
         Dtheta = stateDict['sparseCoding.theta'].float()
@@ -202,6 +300,7 @@ if __name__ == "__main__":
                                         
     net.load_state_dict(stateDict)
 
-    Acc = testing(testloader, net, gpu_id, clip)
-    #Acc = visualize_res(testloader, net, gpu_id, clip)
-    print('Acc:%.4f' % Acc)
+    #Acc = testing(testloader, net, gpu_id, clip)
+    #print('Acc:%.4f' % Acc)
+    visualize_reconstruct(testloader, net, gpu_id, clip)
+    

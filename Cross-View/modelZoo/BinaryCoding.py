@@ -308,7 +308,7 @@ class classificationWSparseCode(nn.Module):
 
         label = self.Classifier(sparseCode)
 
-        return label, Reconstruction
+        return label, sparseCode, Reconstruction
 
 class Tenc_SparseC_Cl(nn.Module):
     def __init__(self, num_class, Npole, Drr, Dtheta, dataType, dim, fistaLam, gpu_id):
@@ -323,9 +323,9 @@ class Tenc_SparseC_Cl(nn.Module):
         self.dataType = dataType
         self.fistaLam = fistaLam
         
-        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=25*2, ff_dim=2048, num_heads=5, num_layers=2, dropout=0.1)
+        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=2048, num_heads=5, num_layers=2, dropout=0.1)
 
-        self.Classifier = classificationTenc(num_class=self.num_class, Npole=Npole, dataType=self.dataType)
+        self.Classifier = classificationGlobal(num_class=self.num_class, Npole=Npole, dataType=self.dataType)
 
         self.sparse_coding = DyanEncoder(self.Drr, self.Dtheta,lam=self.fistaLam, gpu_id=self.gpu_id)
 
@@ -341,17 +341,19 @@ class Tenc_SparseC_Cl(nn.Module):
                 .repeat(batch_size, 1)
                 .lt(lengths.unsqueeze(1)))
 
-    def forward(self, x, T, lengths):
+    def forward(self, x, T, lengths=None):
 
-        padding_mask = self.key_padding_mask(lengths, max_len=T)
-
-        tenc_out = self.transformer_encoder(x, padding_mask)
+        if lengths is not None:
+            padding_mask = self.key_padding_mask(lengths, max_len=T)
+            tenc_out = self.transformer_encoder(x, padding_mask)
+        else:
+            tenc_out = self.transformer_encoder(x)
 
         sparseCode, Dict, Reconstruction  = self.sparse_coding.forward2(tenc_out, T) # w.o. RH
 
         label = self.Classifier(sparseCode)
 
-        return label, Reconstruction, tenc_out
+        return label, sparseCode, Reconstruction, tenc_out
         
 class Tenc_Cl(nn.Module):
     def __init__(self, num_class, gpu_id):
@@ -407,9 +409,9 @@ class Dyan_Autoencoder(nn.Module):
 
         print('***** Dyan Autoencoder *****')
 
-        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=256, num_heads=5, num_layers=2, dropout=0.5)
+        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=2048, num_heads=5, num_layers=8, dropout=0.1)
         self.sparse_coding = DyanEncoder(self.Drr, self.Dtheta,  lam=fistaLam, gpu_id=self.gpu_id)
-        self.transformer_decoder = TransformerDecoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=256, num_heads=5, num_layers=2, dropout=0.5)
+        self.transformer_decoder = TransformerDecoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=2048, num_heads=5, num_layers=8, dropout=0.1)
 
     def get_tgt_mask(self, size, batch_size) -> torch.tensor:
 
