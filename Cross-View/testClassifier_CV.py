@@ -90,13 +90,12 @@ def visualize_cls(dataloader, net, gpu_id, clip):
             # label, sparseC, dyan_out = net(input, t) # 'DY + CL'
             # dyan_inp = input
 
-            #label, sparseC, recon, dyan_inp = net(input, t) # 'Tenc + DY + CL'
-
-            recon, dyan_inp, tdec_out = net(input, t)
+            label, sparseC, recon, dyan_inp = net(input, t) # 'Tenc + DY + CL
             
             recon_loss = mseLoss(recon, dyan_inp).data.item()
             global_recon_loss += recon_loss
-            sc_lst = torch.flatten(tdec_out[:, :, :]).cpu().detach().numpy().tolist()
+
+            sc_lst = torch.flatten(sparseC[:, :, :]).cpu().detach().numpy().tolist()
             recon_lst = torch.flatten(recon[:, :, :]).cpu().detach().numpy().tolist()
             dyan_inp_lst = torch.flatten(dyan_inp[:, :, :]).cpu().detach().numpy().tolist()
             inp_lst = torch.flatten(input[:, :, :]).cpu().detach().numpy().tolist()
@@ -106,46 +105,31 @@ def visualize_cls(dataloader, net, gpu_id, clip):
             dyan_inps.append(dyan_inp_lst)
             net_inps.append(inp_lst)
 
-            # if clip == 'Single':
-            #     label = label
-            #     pred = torch.argmax(label, 1)
+            if clip == 'Single':
+                label = label
+                pred = torch.argmax(label, 1)
 
-            # else:
-            #     num_class = label.shape[-1]
-            #     label = label.reshape(skeleton.shape[0], skeleton.shape[1], num_class)
+            else:
+                num_class = label.shape[-1]
+                label = label.reshape(skeleton.shape[0], skeleton.shape[1], num_class)
 
-            #     label = torch.mean(label,1)
-            #     pred = torch.argmax(label,1)
+                label = torch.mean(label,1)
+                pred = torch.argmax(label,1)
 
-            # correct = torch.eq(y, pred).int()
+            correct = torch.eq(y, pred).int()
             count += y.shape[0]
-            # pred_cnt += torch.sum(correct).data.item()
+            pred_cnt += torch.sum(correct).data.item()
 
             recon_loss_avg = global_recon_loss/count
             #print('recon_loss: ', np.round(recon_loss, 5), ' recon_loss_avg: ', np.round(recon_loss_avg, 5))
             print('i ', i)            
             break
 
-    with open(sc_txt_path, 'w+') as f:
-        for sparseC in sparseCs:
-            scs = ", ".join([str(sc) for sc in sparseC])
-            f.write(scs)
+    write_lst(sc_txt_path, sparseCs)
+    write_lst(y_txt_path, recons)
+    write_lst(ytxt_path, dyan_inps)
+    write_lst(xtxt_path, net_inps)
     
-    with open(inp_txt_path, 'w+') as f:
-        for dyan_inp in dyan_inps:
-            inps = ", ".join([str(inp) for inp in dyan_inp])
-            f.write(inps)
-    
-    with open(recon_txt_path, 'w+') as f:
-        for recon in recons:
-            recs = ", ".join([str(rec) for rec in recon])
-            f.write(recs)
-
-    with open(netinp_txt_path, 'w+') as f:
-        for net_inp in net_inps:
-            netis = ", ".join([str(neti) for neti in net_inp])
-            f.write(netis)
-
     Acc = pred_cnt/count
     recon_loss_avg = global_recon_loss/count
     print(' recon_loss_avg: ', np.round(recon_loss_avg, 5))
