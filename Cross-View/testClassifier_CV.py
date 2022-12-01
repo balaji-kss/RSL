@@ -143,10 +143,51 @@ def write_lst(txt_path, lsts):
             els = ", ".join([str(el) for el in lst])
             f.write(els)
 
+def test_reconstruct(dataloader, net, gpu_id, clip):
+
+    count = 0
+    global_input_loss, global_dyan_loss = 0.0,  0.0
+
+    net.eval()
+    with torch.no_grad():
+        for i, sample in enumerate(dataloader):
+
+            skeleton = sample['input_skeletons']['normSkeleton'].float().cuda(gpu_id)
+        
+            y = sample['action'].cuda(gpu_id)
+            lengths = sample['lengths'].cuda(gpu_id)
+
+            if clip == 'Single':
+                t = skeleton.shape[1]
+                input = skeleton.reshape(skeleton.shape[0], t, -1)
+
+            else:
+                t = skeleton.shape[2]
+                input = skeleton.reshape(skeleton.shape[0]*skeleton.shape[1], t, -1)
+
+            recon, dyan_inp, tdec_out = net(input, t, lengths)
+            
+            dyan_mse = mseLoss(recon, dyan_inp).data.item()
+            input_mse = mseLoss(tdec_out, input).data.item()
+
+            global_input_loss += input_mse
+            global_dyan_loss += dyan_mse
+
+            count += y.shape[0]
+
+    input_loss_avg = global_input_loss/count
+    dyan_loss_avg = global_dyan_loss/count
+
+    input_loss_avg = np.round(input_loss_avg, 3)
+    dyan_loss_avg = np.round(dyan_loss_avg, 3)
+    
+    return dyan_loss_avg, input_loss_avg
+
 def visualize_reconstruct(dataloader, net, gpu_id, clip):
 
     count = 0
-    global_recon_loss = 0
+    global_input_loss = 0
+    global_dyan_loss = 0
     xs, ys, x_s, y_s = [], [], [], []
 
     #net.eval()
@@ -166,10 +207,13 @@ def visualize_reconstruct(dataloader, net, gpu_id, clip):
                 t = skeleton.shape[2]
                 input = skeleton.reshape(skeleton.shape[0]*skeleton.shape[1], t, -1)
 
-            recon, dyan_inp, tdec_out = net(input, t)
+            recon, dyan_inp, tdec_out = net(input, t, lengths)
             
-            recon_loss = mseLoss(recon, dyan_inp).data.item()
-            global_recon_loss += recon_loss
+            dyan_mse = mseLoss(recon, dyan_inp).data.item()
+            input_mse = mseLoss(tdec_out, input).data.item()
+
+            global_input_loss += input_mse
+            global_dyan_loss += dyan_mse
 
             xlst = torch.flatten(input).cpu().detach().numpy().tolist()
             ylst = torch.flatten(dyan_inp).cpu().detach().numpy().tolist()
@@ -182,8 +226,6 @@ def visualize_reconstruct(dataloader, net, gpu_id, clip):
             x_s.append(x_lst)
 
             count += y.shape[0]
-
-            recon_loss_avg = global_recon_loss/count
             print('i ', i)            
             break
 
@@ -192,9 +234,11 @@ def visualize_reconstruct(dataloader, net, gpu_id, clip):
     write_lst(x_txt_path, x_s)
     write_lst(y_txt_path, y_s)
 
-    recon_loss_avg = global_recon_loss/count
-    print(' recon_loss_avg: ', np.round(recon_loss_avg, 5))
-    
+    input_loss_avg = global_input_loss/count
+    dyan_loss_avg = global_dyan_loss/count
+    print(' input_loss_avg: ', np.round(input_loss_avg, 5))
+    print(' dyan_loss_avg: ', np.round(dyan_loss_avg, 5))
+
     return 
 
 def getPlots(LOSS,LOSS_CLS, LOSS_MSE, LOSS_BI, ACC, fig_name):
@@ -254,7 +298,7 @@ if __name__ == "__main__":
     testloader = DataLoader(testSet, batch_size=32, shuffle=False, num_workers=num_workers)
 
     if recon:
-        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon/100.pth'
+        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2_mask1/50.pth'
     elif transformer:
         model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_dyan_exp5_lam0.5/T36_fista01_openpose/200.pth'
     else:

@@ -50,8 +50,8 @@ class TransformerEncoder(nn.Module):
         self.pos_encoder = PositionalEncoding(self.embed_proj_dim, dropout=self.dropout)
         self.encoder_layer = nn.TransformerEncoderLayer(d_model=self.embed_proj_dim, nhead=self.num_heads, dim_feedforward=self.ff_dim, activation=self.activation, dropout=self.dropout, batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=self.num_layers)
+        
         self.act = nn.ReLU()
-        self.dropout1 = nn.Dropout(p=dropout)
         self.print_params()
         
     def print_params(self):
@@ -62,19 +62,16 @@ class TransformerEncoder(nn.Module):
         print('num_layers: ', self.num_layers)
         print('dropout: ', self.dropout)
 
-    def forward(self, x, mask=None):
+    def forward(self, x, src_mask, src_key_padding_mask):
         
         if self.input_layer:
             x = self.input_layer(x)
 
         pe_out = self.pos_encoder(x)
 
-        if mask is not None:
-            tenc_out = self.transformer_encoder(pe_out, src_key_padding_mask=~mask)
-        else:
-            tenc_out = self.transformer_encoder(pe_out)
-        # tenc_out = self.act(tenc_out)
-        # tenc_out = self.dropout1(tenc_out)
+        tenc_out = self.transformer_encoder(pe_out, mask=src_mask, src_key_padding_mask=src_key_padding_mask)
+        
+        tenc_out = self.act(tenc_out)
 
         if self.output_layer:
             tenc_out = self.output_layer(tenc_out)
@@ -105,6 +102,7 @@ class TransformerDecoder(nn.Module):
         self.decoder_layer = nn.TransformerDecoderLayer(d_model=self.embed_proj_dim, nhead=self.num_heads, dim_feedforward=self.ff_dim, activation=self.activation, dropout=self.dropout, batch_first=True)
         self.transformer_decoder = nn.TransformerDecoder(self.decoder_layer, num_layers=self.num_layers)
 
+        self.act = nn.ReLU()
         self.print_params()
         
     def print_params(self):
@@ -115,13 +113,16 @@ class TransformerDecoder(nn.Module):
         print('num_layers: ', self.num_layers)
         print('dropout: ', self.dropout)
 
-    def forward(self, x, tgt_mask=None):
+    def forward(self, x, tgt_mask, tgt_key_padding_mask):
         
         if self.input_layer:
             x = self.input_layer(x)
 
         pd_out = self.pos_decoder(x)
-        tdec_out = self.transformer_decoder(pd_out, pd_out, tgt_mask=tgt_mask)
+
+        tdec_out = self.transformer_decoder(pd_out, pd_out, tgt_mask=tgt_mask, tgt_key_padding_mask=tgt_key_padding_mask)
+
+        tdec_out = self.act(tdec_out)
 
         if self.output_layer:
             tdec_out = self.output_layer(tdec_out)

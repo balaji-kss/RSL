@@ -341,6 +341,13 @@ class Tenc_SparseC_Cl(nn.Module):
                 .repeat(batch_size, 1)
                 .lt(lengths.unsqueeze(1)))
 
+    def src_att_mask(self, src_len):
+
+        mask = (torch.triu(torch.ones(src_len, src_len)) == 1).transpose(0, 1)
+        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+
+        return mask
+
     def forward(self, x, T, lengths=None):
 
         if lengths is not None:
@@ -407,40 +414,85 @@ class Dyan_Autoencoder(nn.Module):
         self.dataType = dataType
         self.fistaLam = fistaLam
 
-        print('***** Dyan Autoencoder *****')
+        print('***** Dyan Autoencoder just mask *****')
 
-        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=2048, num_heads=5, num_layers=8, dropout=0.1)
+        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=25*2, ff_dim=2048, num_heads=5, num_layers=2, dropout=0.1)
         self.sparse_coding = DyanEncoder(self.Drr, self.Dtheta,  lam=fistaLam, gpu_id=self.gpu_id)
-        self.transformer_decoder = TransformerDecoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=2048, num_heads=5, num_layers=8, dropout=0.1)
+        self.transformer_decoder = TransformerDecoder(embed_dim=25*2, embed_proj_dim=25*2, ff_dim=2048, num_heads=5, num_layers=2, dropout=0.1)
 
-    def get_tgt_mask(self, size, batch_size) -> torch.tensor:
+        self.tgt_mask = self.generate_square_subsequent_mask(36).cuda()
 
-        # Generates a square matrix where the each row allows one word more to be seen
-        mask = torch.tril(torch.ones(size, size) == 1) # Lower triangular matrix
-        mask = mask.float()
-        mask = mask.masked_fill(mask == 0, float('-inf')) # Convert zeros to -inf
-        mask = mask.masked_fill(mask == 1, float(0.0)) # Convert ones to 0
-        
+    def key_padding_mask(self, lengths, max_len=None):
+        """
+        Used to mask padded positions: creates a (batch_size, max_len) boolean mask from a tensor of sequence lengths,
+        where 1 means keep element at this position (time step)
+        """
+        batch_size = lengths.numel()
+        max_len = max_len or lengths.max_val()  # trick works because of overloading of 'or' operator for non-boolean types
+        return (torch.arange(0, max_len, device=lengths.device)
+                .type_as(lengths)
+                .repeat(batch_size, 1)
+                .lt(lengths.unsqueeze(1)))
+
+    def generate_square_subsequent_mask(self, sz: int, device='cpu'):
+    
         # EX for size=5:
         # [[0., -inf, -inf, -inf, -inf],
         #  [0.,   0., -inf, -inf, -inf],
         #  [0.,   0.,   0., -inf, -inf],
         #  [0.,   0.,   0.,   0., -inf],
         #  [0.,   0.,   0.,   0.,   0.]]
-        
-        return mask.repeat(5 * batch_size, 1, 1).cuda()
+    
+        return torch.triu(torch.full((sz, sz), float('-inf'), device=device), diagonal=1)
 
-    def forward(self, x, T):
+    def get_src_mask(self, lengths, max_len=None):
+
+        mask = ~torch.arange(0, max_len, device=lengths.device).repeat(max_len, 1).lt(lengths.unsqueeze(1).unsqueeze(1))
+        mask = mask.float()
+        mask = mask.masked_fill(mask == 1, float('-inf'))
+
+        # EX for size=5, len=2:
+        # [[0.,   0., -inf, -inf, -inf],
+        #  [0.,   0., -inf, -inf, -inf],
+        #  [0.,   0., -inf, -inf, -inf],
+        #  [0.,   0., -inf, -inf, -inf],
+        #  [0.,   0., -inf, -inf, -inf]]
+
+        return mask.repeat(5, 1, 1)
+
+    def get_tgt_mask(self, lengths, max_len=None):
+
+        sqr_subseq_mask = torch.tril(torch.ones(max_len, max_len, device=lengths.device) == 1)
+        pad_mask = torch.arange(0, max_len, device=lengths.device).repeat(max_len, 1).lt(lengths.unsqueeze(1).unsqueeze(1))
+
+        mask = pad_mask & sqr_subseq_mask
+        mask = mask.float()
+        mask = mask.masked_fill(mask == 0, float('-inf'))
+        mask = mask.masked_fill(mask == 1, float(0.0))
+
+        # EX for size=5, len=2:
+        # [[0., -inf, -inf, -inf, -inf],
+        #  [0.,   0., -inf, -inf, -inf],
+        #  [0.,   0., -inf, -inf, -inf],
+        #  [0.,   0., -inf, -inf, -inf],
+        #  [0.,   0., -inf, -inf, -inf]]
+
+        return mask.repeat(5, 1, 1)
+
+    def forward(self, x, T, lengths):
         
-        tenc_out = self.transformer_encoder(x)
+        #key_padding_mask = ~self.key_padding_mask(lengths, max_len=T).cuda()
+        key_padding_mask = None
+        src_mask = self.get_src_mask(lengths, max_len=T).cuda()
+        tgt_mask = self.get_tgt_mask(lengths, max_len=T).cuda()
+
+        tenc_out = self.transformer_encoder(x, src_mask=src_mask, src_key_padding_mask=key_padding_mask)
 
         sparse_code, Dict, _ = self.sparse_coding.forward2(tenc_out, T)
 
         dyan_out = torch.matmul(Dict, sparse_code)
-        
-        self.tgt_mask = self.get_tgt_mask(dyan_out.shape[1], dyan_out.shape[0])
 
-        tdec_out = self.transformer_decoder(dyan_out, self.tgt_mask)
+        tdec_out = self.transformer_decoder(dyan_out, tgt_mask=tgt_mask, tgt_key_padding_mask=key_padding_mask)
 
         return dyan_out, tenc_out, tdec_out
 
