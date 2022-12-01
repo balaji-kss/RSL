@@ -141,6 +141,7 @@ def write_lst(txt_path, lsts):
     with open(txt_path, 'w+') as f:
         for lst in lsts:
             els = ", ".join([str(el) for el in lst])
+            els += ", "
             f.write(els)
 
 def test_reconstruct(dataloader, net, gpu_id, clip):
@@ -190,7 +191,7 @@ def visualize_reconstruct(dataloader, net, gpu_id, clip):
     global_dyan_loss = 0
     xs, ys, x_s, y_s = [], [], [], []
 
-    #net.eval()
+    net.eval()
     with torch.no_grad():
         for i, sample in enumerate(dataloader):
 
@@ -227,7 +228,7 @@ def visualize_reconstruct(dataloader, net, gpu_id, clip):
 
             count += y.shape[0]
             print('i ', i)            
-            break
+            #break
 
     write_lst(xtxt_path, xs)
     write_lst(ytxt_path, ys)
@@ -236,8 +237,8 @@ def visualize_reconstruct(dataloader, net, gpu_id, clip):
 
     input_loss_avg = global_input_loss/count
     dyan_loss_avg = global_dyan_loss/count
-    print(' input_loss_avg: ', np.round(input_loss_avg, 5))
-    print(' dyan_loss_avg: ', np.round(dyan_loss_avg, 5))
+    print(' input_loss_avg: ', input_loss_avg)
+    print(' dyan_loss_avg: ', dyan_loss_avg)
 
     return 
 
@@ -298,7 +299,7 @@ if __name__ == "__main__":
     testloader = DataLoader(testSet, batch_size=32, shuffle=False, num_workers=num_workers)
 
     if recon:
-        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2_mask1/50.pth'
+        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2_mask1/300.pth'
     elif transformer:
         model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_dyan_exp5_lam0.5/T36_fista01_openpose/200.pth'
     else:

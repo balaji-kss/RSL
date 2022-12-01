@@ -34,7 +34,7 @@ Dtheta = torch.from_numpy(Dtheta).float()
 
 modelRoot = './ModelFile/crossView_NUCLA/'
 
-saveModel = modelRoot + clip +  '/tenc_recon_n2_mask3/'
+saveModel = modelRoot + clip +  '/tenc_recon_n2_mask5/'
 if not os.path.exists(saveModel):
     os.makedirs(saveModel)
 print('model path:', saveModel)
@@ -59,7 +59,7 @@ lr = 5e-3
 optimizer = torch.optim.SGD(filter(lambda x: x.requires_grad, net.parameters()), lr=lr, weight_decay=0.001, momentum=0.9)
 
 scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[100, 200], gamma=0.4)
-mseLoss = torch.nn.MSELoss()
+mseLoss = torch.nn.L1Loss() #torch.nn.MSELoss()
 
 LOSS = []
 ACC = []

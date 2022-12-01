@@ -481,10 +481,11 @@ class Dyan_Autoencoder(nn.Module):
 
     def forward(self, x, T, lengths):
         
-        #key_padding_mask = ~self.key_padding_mask(lengths, max_len=T).cuda()
-        key_padding_mask = None
-        src_mask = self.get_src_mask(lengths, max_len=T).cuda()
-        tgt_mask = self.get_tgt_mask(lengths, max_len=T).cuda()
+        key_padding_mask = ~self.key_padding_mask(lengths, max_len=T).cuda()
+        #key_padding_mask = None
+        #src_mask = self.get_src_mask(lengths, max_len=T).cuda()
+        #tgt_mask = self.get_tgt_mask(lengths, max_len=T).cuda()
+        src_mask = None
 
         tenc_out = self.transformer_encoder(x, src_mask=src_mask, src_key_padding_mask=key_padding_mask)
 
@@ -492,7 +493,7 @@ class Dyan_Autoencoder(nn.Module):
 
         dyan_out = torch.matmul(Dict, sparse_code)
 
-        tdec_out = self.transformer_decoder(dyan_out, tgt_mask=tgt_mask, tgt_key_padding_mask=key_padding_mask)
+        tdec_out = self.transformer_decoder(dyan_out, tgt_mask=self.tgt_mask, tgt_key_padding_mask=key_padding_mask)
 
         return dyan_out, tenc_out, tdec_out
 
