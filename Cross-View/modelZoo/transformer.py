@@ -14,7 +14,11 @@ class PositionalEncoding(nn.Module):
 
         pe = torch.zeros(1, max_len, d_model)
         pe[:, :, 0::2] = torch.sin(position * div_term) #(max_len, div_term)
-        pe[:, :, 1::2] = torch.cos(position * div_term) #(max_len, div_term)
+        if d_model%2 != 0:
+            pe[:, :, 1::2] = torch.cos(position * div_term)[:,0:-1] #(max_len, div_term)
+        else:
+            pe[:, :, 1::2] = torch.cos(position * div_term)
+
         self.register_buffer('pe', pe)
 
     def forward(self, x: Tensor) -> Tensor:
@@ -28,24 +32,28 @@ class PositionalEncoding(nn.Module):
 
 class TransformerEncoder(nn.Module):
     
-    def __init__(self, embed_dim=25*2, embed_proj_dim=None, ff_dim=256, num_heads=5, num_layers=6, dropout=0.1):
+    def __init__(self, embed_dim=25*2, is_input_proj=None, is_output_proj=None, embed_proj_dim=None, ff_dim=256, num_heads=5, num_layers=6, dropout=0.1):
         super().__init__()
         self.embed_dim = embed_dim
-        self.embed_proj_dim = embed_proj_dim
+        if embed_proj_dim is None:
+            self.embed_proj_dim = embed_dim
+        else:
+            self.embed_proj_dim = embed_proj_dim
         self.ff_dim = ff_dim
         self.num_heads = num_heads 
         self.dropout = dropout
         self.activation = 'relu'
         self.num_layers = num_layers
-     
-        if self.embed_proj_dim:
-            print('input output layer present')
+        self.is_input_proj = is_input_proj
+        self.is_output_proj = is_output_proj
+
+        if self.is_input_proj:
+            print('input projection present encoder: ', self.embed_proj_dim)
             self.input_layer = nn.Linear(self.embed_dim, self.embed_proj_dim)
+
+        if self.is_output_proj:
+            print('output projection present encoder: ', self.embed_proj_dim)
             self.output_layer = nn.Linear(self.embed_proj_dim, self.embed_dim)
-        else:
-            self.embed_proj_dim = self.embed_dim
-            self.input_layer = None
-            self.output_layer = None
 
         self.pos_encoder = PositionalEncoding(self.embed_proj_dim, dropout=self.dropout)
         self.encoder_layer = nn.TransformerEncoderLayer(d_model=self.embed_proj_dim, nhead=self.num_heads, dim_feedforward=self.ff_dim, activation=self.activation, dropout=self.dropout, batch_first=True)
@@ -64,39 +72,45 @@ class TransformerEncoder(nn.Module):
 
     def forward(self, x, src_mask, src_key_padding_mask):
         
-        if self.input_layer:
+        if self.is_input_proj:
             x = self.input_layer(x)
 
         pe_out = self.pos_encoder(x)
 
         tenc_out = self.transformer_encoder(pe_out, mask=src_mask, src_key_padding_mask=src_key_padding_mask)
         
-        tenc_out = self.act(tenc_out)
+        #tenc_out = self.act(tenc_out)
 
-        if self.output_layer:
+        if self.is_output_proj:
             tenc_out = self.output_layer(tenc_out)
 
         return tenc_out
 
 class TransformerDecoder(nn.Module):
     
-    def __init__(self, embed_dim=25*2, embed_proj_dim=None, ff_dim=256, num_heads=5, num_layers=6, dropout=0.1):
+    def __init__(self, embed_dim=25*2, is_input_proj=None, is_output_proj=None, embed_proj_dim=None, ff_dim=256, num_heads=5, num_layers=6, dropout=0.1):
+        
         super().__init__()
         self.embed_dim = embed_dim
-        self.embed_proj_dim = embed_proj_dim
+        if embed_proj_dim is None:
+            self.embed_proj_dim = embed_dim
+        else:
+            self.embed_proj_dim = embed_proj_dim
         self.ff_dim = ff_dim
         self.num_heads = num_heads 
         self.dropout = dropout
         self.activation = 'relu'
         self.num_layers = num_layers
-     
-        if self.embed_proj_dim:
+        self.is_input_proj = is_input_proj
+        self.is_output_proj = is_output_proj
+
+        if self.is_input_proj:
+            print('input projection present decoder: ', self.embed_proj_dim)
             self.input_layer = nn.Linear(self.embed_dim, self.embed_proj_dim)
+
+        if self.is_output_proj:
+            print('output projection present decoder: ', self.embed_proj_dim)
             self.output_layer = nn.Linear(self.embed_proj_dim, self.embed_dim)
-        else:
-            self.embed_proj_dim = self.embed_dim
-            self.input_layer = None
-            self.output_layer = None
 
         self.pos_decoder = PositionalEncoding(self.embed_proj_dim, self.dropout)        
         self.decoder_layer = nn.TransformerDecoderLayer(d_model=self.embed_proj_dim, nhead=self.num_heads, dim_feedforward=self.ff_dim, activation=self.activation, dropout=self.dropout, batch_first=True)
@@ -115,16 +129,16 @@ class TransformerDecoder(nn.Module):
 
     def forward(self, x, tgt_mask, tgt_key_padding_mask):
         
-        if self.input_layer:
+        if self.is_input_proj:
             x = self.input_layer(x)
 
         pd_out = self.pos_decoder(x)
 
         tdec_out = self.transformer_decoder(pd_out, pd_out, tgt_mask=tgt_mask, tgt_key_padding_mask=tgt_key_padding_mask)
 
-        tdec_out = self.act(tdec_out)
+        #tdec_out = self.act(tdec_out)
 
-        if self.output_layer:
+        if self.is_output_proj:
             tdec_out = self.output_layer(tdec_out)
 
         return tdec_out

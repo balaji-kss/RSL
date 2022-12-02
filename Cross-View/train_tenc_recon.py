@@ -34,7 +34,7 @@ Dtheta = torch.from_numpy(Dtheta).float()
 
 modelRoot = './ModelFile/crossView_NUCLA/'
 
-saveModel = modelRoot + clip +  '/tenc_recon_n2_mask_nopadloss/'
+saveModel = modelRoot + clip +  '/tenc_recon_n2_dim25/'
 if not os.path.exists(saveModel):
     os.makedirs(saveModel)
 print('model path:', saveModel)
@@ -54,7 +54,7 @@ testloader = DataLoader(testSet, batch_size=bz, shuffle=False, num_workers=num_w
 net = Dyan_Autoencoder(Drr=Drr, Dtheta=Dtheta, dim=2, dataType=dataType, \
                     Inference=True, gpu_id=gpu_id, fistaLam=fistaLam).cuda(gpu_id)
 
-lr = 5e-3
+lr = 1e-2
 
 optimizer = torch.optim.SGD(filter(lambda x: x.requires_grad, net.parameters()), lr=lr, weight_decay=0.001, momentum=0.9)
 
@@ -119,7 +119,7 @@ for epoch in range(0, Epoch + 1):
     end_time = time.time()
     time_per_epoch = (end_time - start_time)/60.0 #mins
 
-    print('epoch: ', epoch, ' |time: ', np.round(time_per_epoch, 3), ' mins |loss:', np.round(total_loss_avg, 3), ' |dyan_mse:', np.round(loss_dyan_avg, 3), ' |inp_recon_mse:', np.round(loss_inp_recon_avg, 3))
+    print('epoch: ', epoch, ' |time: ', np.round(time_per_epoch, 3), ' mins |loss:', np.round(total_loss_avg, 6), ' |dyan_mse:', np.round(loss_dyan_avg, 6), ' |inp_recon_mse:', np.round(loss_inp_recon_avg, 6))
 
     scheduler.step()
     if epoch % 10 == 0:

@@ -179,8 +179,8 @@ def test_reconstruct(dataloader, net, gpu_id, clip):
     input_loss_avg = global_input_loss/count
     dyan_loss_avg = global_dyan_loss/count
 
-    input_loss_avg = np.round(input_loss_avg, 3)
-    dyan_loss_avg = np.round(dyan_loss_avg, 3)
+    input_loss_avg = np.round(input_loss_avg, 6)
+    dyan_loss_avg = np.round(dyan_loss_avg, )
     
     return dyan_loss_avg, input_loss_avg
 
@@ -299,7 +299,7 @@ if __name__ == "__main__":
     testloader = DataLoader(testSet, batch_size=32, shuffle=False, num_workers=num_workers)
 
     if recon:
-        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2_mask1/300.pth'
+        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2_mask_nopadloss/40.pth'
     elif transformer:
         model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_dyan_exp5_lam0.5/T36_fista01_openpose/200.pth'
     else:
