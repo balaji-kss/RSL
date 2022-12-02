@@ -51,14 +51,37 @@ def src_mask(lengths, max_len=None):
 
     return mask
 
+def test_mse():
+    
+    mseLoss1 = torch.nn.MSELoss()
+    mseLoss2 = torch.nn.MSELoss(reduction='none')
+    
+    lengths = torch.tensor([1, 3, 6])
+    pad_mask = padding_mask(lengths, 6)
+    pad_mask_expand = pad_mask.unsqueeze(2).repeat(1, 1, 5)
+    print('pad_mask ', pad_mask, pad_mask_expand, pad_mask_expand.shape)
+
+    input = torch.rand(3, 6, 5)
+    output = torch.rand(3, 6, 5)
+    loss = mseLoss1(input, output)
+    print('loss ', loss)
+
+    input_mask = torch.masked_select(input, pad_mask_expand)
+    output_mask = torch.masked_select(output, pad_mask_expand)
+
+    loss = mseLoss2(input_mask, output_mask)
+    
+    print('loss ', loss, torch.mean(loss), loss.shape)
+
+
 if __name__ == "__main__":
 
-    attn_mask = generate_square_subsequent_mask(8)
-    print('attn_mask ', attn_mask)
+    # attn_mask = generate_square_subsequent_mask(8)
+    # print('attn_mask ', attn_mask)
 
-    lengths = torch.tensor([2, 3, 6])
-    srcmask = src_mask(lengths, max_len=6)
-    print('srcmask ', srcmask, srcmask.shape)
+    # lengths = torch.tensor([2, 3, 6])
+    # srcmask = src_mask(lengths, max_len=6)
+    # print('srcmask ', srcmask, srcmask.shape)
 
     # print('lengths ', lengths, lengths.shape)
     # pad_mask = padding_mask(lengths, 36)
@@ -69,3 +92,5 @@ if __name__ == "__main__":
     # outputs, weights = mha(inputs, inputs, inputs, attn_mask=attn_mask)
     # print('outputs ', outputs)
     # print('weights ', weights)
+
+    test_mse()

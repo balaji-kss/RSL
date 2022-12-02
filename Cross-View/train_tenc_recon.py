@@ -34,7 +34,7 @@ Dtheta = torch.from_numpy(Dtheta).float()
 
 modelRoot = './ModelFile/crossView_NUCLA/'
 
-saveModel = modelRoot + clip +  '/tenc_recon_n2_mask5/'
+saveModel = modelRoot + clip +  '/tenc_recon_n2_mask_nopadloss/'
 if not os.path.exists(saveModel):
     os.makedirs(saveModel)
 print('model path:', saveModel)
@@ -59,7 +59,8 @@ lr = 5e-3
 optimizer = torch.optim.SGD(filter(lambda x: x.requires_grad, net.parameters()), lr=lr, weight_decay=0.001, momentum=0.9)
 
 scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[100, 200], gamma=0.4)
-mseLoss = torch.nn.L1Loss() #torch.nn.MSELoss()
+mseLoss = torch.nn.MSELoss()
+maskedmseLoss = MaskedMSELoss()
 
 LOSS = []
 ACC = []
@@ -87,6 +88,10 @@ for epoch in range(0, Epoch + 1):
         gt_label = sample['action'].cuda(gpu_id)
         lengths = sample['lengths'].cuda(gpu_id)
 
+        pad_mask = net.key_padding_mask(lengths, max_len=T)
+        pad_mask_expand = pad_mask.unsqueeze(2).repeat(1, 1, 50) 
+        #print('pad_mask_expand ', pad_mask_expand, pad_mask_expand.shape) #(B, 36, 50)
+
         if clip == 'Single':
             t = skeletons.shape[1]
             input_skeletons = skeletons.reshape(skeletons.shape[0], t, -1)
@@ -97,9 +102,9 @@ for epoch in range(0, Epoch + 1):
         dyan_out, tenc_out, tdec_out = net(input_skeletons, t, lengths)
         
         dyan_mse = mseLoss(dyan_out, tenc_out)
-        input_mse = mseLoss(tdec_out, input_skeletons)
+        input_mse = maskedmseLoss(tdec_out, input_skeletons, pad_mask_expand)
 
-        loss = lam1 * dyan_mse + lam2 * input_mse  
+        loss = lam1 * dyan_mse + lam2 * input_mse 
         loss.backward()
 
         optimizer.step()
