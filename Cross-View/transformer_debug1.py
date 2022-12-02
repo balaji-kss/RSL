@@ -32,23 +32,23 @@ T = 36 # input clip length
 fusion = False
 'initialized params'
 
-model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2/100.pth'
+model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2_dim50/300.pth'
 # model_path = '/home/balaji/Documents/code/RSL/Thesis/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_dyan_posfix/T36_fista01_openpose/100.pth'
-# stateDict = torch.load(model_path, map_location=map_loc)['state_dict']
-# Drr = stateDict['sparse_coding.rr'].float()
-# Dtheta = stateDict['sparse_coding.theta'].float()
+stateDict = torch.load(model_path, map_location=map_loc)['state_dict']
+Drr = stateDict['sparse_coding.rr'].float()
+Dtheta = stateDict['sparse_coding.theta'].float()
 
-P, Pall = gridRing(N)
-Drr = abs(P)
-Drr = torch.from_numpy(Drr).float()
-Dtheta = np.angle(P)
-Dtheta = torch.from_numpy(Dtheta).float()
+# P, Pall = gridRing(N)
+# Drr = abs(P)
+# Drr = torch.from_numpy(Drr).float()
+# Dtheta = np.angle(P)
+# Dtheta = torch.from_numpy(Dtheta).float()
 
 print('Drr ', Drr)
 print('Dtheta ', Dtheta)
 
 modelRoot = './ModelFile/crossView_NUCLA/'
-mode = '/tenc_exp8/'
+mode = '/tenc_exp9_dim50/'
 
 saveModel = modelRoot + clip + mode + 'T36_fista01_openpose/'
 if not os.path.exists(saveModel):
