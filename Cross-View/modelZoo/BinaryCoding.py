@@ -450,9 +450,9 @@ class Dyan_Autoencoder(nn.Module):
 
         print('***** Dyan Autoencoder just mask *****')
 
-        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=25, is_input_proj=1, ff_dim=2048, num_heads=5, num_layers=2, dropout=0.1)
+        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=100, is_input_proj=1, ff_dim=2048, num_heads=5, num_layers=2, dropout=0.1)
         self.sparse_coding = DyanEncoder(self.Drr, self.Dtheta,  lam=fistaLam, gpu_id=self.gpu_id)
-        self.transformer_decoder = TransformerDecoder(embed_dim=25*2, embed_proj_dim=25, is_output_proj=1, ff_dim=2048, num_heads=5, num_layers=2, dropout=0.1)
+        self.transformer_decoder = TransformerDecoder(embed_dim=25*2, embed_proj_dim=100, is_output_proj=1, ff_dim=2048, num_heads=5, num_layers=2, dropout=0.1)
 
         self.tgt_mask = self.generate_square_subsequent_mask(36).cuda()
 

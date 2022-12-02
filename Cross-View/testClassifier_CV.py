@@ -139,9 +139,10 @@ def visualize_cls(dataloader, net, gpu_id, clip):
 def write_lst(txt_path, lsts):
 
     with open(txt_path, 'w+') as f:
-        for lst in lsts:
+        for i, lst in enumerate(lsts):
             els = ", ".join([str(el) for el in lst])
-            els += ", "
+            if i<len(lsts) - 1:
+                els += ", "
             f.write(els)
 
 def test_reconstruct(dataloader, net, gpu_id, clip):
@@ -299,7 +300,7 @@ if __name__ == "__main__":
     testloader = DataLoader(testSet, batch_size=32, shuffle=False, num_workers=num_workers)
 
     if recon:
-        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2_mask_nopadloss/40.pth'
+        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2_dim100/260.pth'
     elif transformer:
         model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_dyan_exp5_lam0.5/T36_fista01_openpose/200.pth'
     else:
