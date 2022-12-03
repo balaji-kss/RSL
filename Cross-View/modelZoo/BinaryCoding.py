@@ -367,7 +367,7 @@ class Dyan_Tenc(nn.Module):
         self.fistaLam = fistaLam
         self.sparseCoding = DyanEncoder(self.Drr, self.Dtheta, lam=self.fistaLam, gpu_id=self.gpu_id)
 
-        self.transformer_encoder = TransformerEncoder(embed_dim=161, embed_proj_dim=None, ff_dim=2048, num_heads=7, num_layers=2, dropout=0.1)
+        self.transformer_encoder = TransformerEncoder(embed_dim=161, embed_proj_dim=None, ff_dim=2048, num_heads=7, num_layers=2, dropout=0.1, seq_len=50)
 
         self.dropout = nn.Dropout(p=0.1)
         self.fc1 = nn.Linear(161*50, 1024)
@@ -379,20 +379,22 @@ class Dyan_Tenc(nn.Module):
     def forward(self, x, T):
 
         sparseCode, Dict, Reconstruction  = self.sparseCoding.forward2(x, T) # w.o. RH
-
-        sparseCode = sparseCode.permute(0, 2, 1) #(B, 161, 50) --> (B, 50, 161)
-        tenc_out = self.transformer_encoder(sparseCode, src_mask=None, src_key_padding_mask=None)
         
+        sparseCode = sparseCode.permute(0, 2, 1) #(B, 161, 50) --> (B, 50, 161)
+        
+        tenc_out = self.transformer_encoder(sparseCode, src_mask=None, src_key_padding_mask=None)
+
         tenc_out = self.relu(tenc_out) #(B, 50, 161)
         tenc_out = self.dropout(tenc_out)
 
         tenc_out = tenc_out.view(tenc_out.shape[0],-1)  #flatten (B, 161 * 50)
+        
         tenc_out = self.relu(self.fc1(tenc_out)) # (B, 1024)
         tenc_out = self.relu(self.fc2(tenc_out)) # (B, 256)
         tenc_out = self.relu(self.fc3(tenc_out)) # (B, 64)
         label = self.cls(tenc_out) # (B, 10)
 
-        return label, sparseCode, Reconstruction
+        return label, Reconstruction
 
 class Tenc_Cl(nn.Module):
     def __init__(self, num_class, gpu_id):

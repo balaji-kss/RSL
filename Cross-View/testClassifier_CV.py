@@ -29,10 +29,10 @@ def testing(dataloader, net, gpu_id, clip):
                 input = skeleton.reshape(skeleton.shape[0]*skeleton.shape[1], t, -1)
 		
 
-            #label, dyan_out = net(input, t) # 'DY + CL'
-            #Edyan_inp = input
+            label, recon = net(input, t) # 'DY + CL'
+            dyan_inp = input
 
-            label, recon, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL'
+            #label, recon, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL'
             recon_loss = mseLoss(recon, dyan_inp).data.item()
             global_recon_loss += recon_loss
 
@@ -88,7 +88,7 @@ def visualize_cls(dataloader, net, gpu_id, clip):
             # label, sparseC, dyan_out = net(input, t) # 'DY + CL'
             # dyan_inp = input
 
-            label, sparseC, recon, dyan_inp = net(input, t) # 'Tenc + DY + CL
+            #label, sparseC, recon, dyan_inp = net(input, t) # 'Tenc + DY + CL
             
             recon_loss = mseLoss(recon, dyan_inp).data.item()
             global_recon_loss += recon_loss

@@ -47,7 +47,7 @@ class TransformerEncoder(nn.Module):
         self.is_input_proj = is_input_proj
         self.is_output_proj = is_output_proj
         self.seq_len = seq_len
-        
+
         if self.is_input_proj:
             print('input projection present encoder: ', self.embed_proj_dim)
             self.input_layer = nn.Linear(self.embed_dim, self.embed_proj_dim)
@@ -56,7 +56,7 @@ class TransformerEncoder(nn.Module):
             print('output projection present encoder: ', self.embed_proj_dim)
             self.output_layer = nn.Linear(self.embed_proj_dim, self.embed_dim)
 
-        self.pos_encoder = PositionalEncoding(self.embed_proj_dim, dropout=self.dropout)
+        self.pos_encoder = PositionalEncoding(self.embed_proj_dim, dropout=self.dropout, max_len=seq_len)
         self.encoder_layer = nn.TransformerEncoderLayer(d_model=self.embed_proj_dim, nhead=self.num_heads, dim_feedforward=self.ff_dim, activation=self.activation, dropout=self.dropout, batch_first=True)
         self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=self.num_layers)
         
