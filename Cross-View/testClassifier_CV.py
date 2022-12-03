@@ -28,14 +28,12 @@ def testing(dataloader, net, gpu_id, clip):
                 t = skeleton.shape[2]
                 input = skeleton.reshape(skeleton.shape[0]*skeleton.shape[1], t, -1)
 		
-            # print('lengths', lengths)
-            # print('input shape ', input.shape)
+
             #label, dyan_out = net(input, t) # 'DY + CL'
             #Edyan_inp = input
 
-            label, dyan_out, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL'
-            #recon_loss = mseLoss(dyan_out, dyan_inp).data.item()
-            recon_loss = 0.0
+            label, recon, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL'
+            recon_loss = mseLoss(recon, dyan_inp).data.item()
             global_recon_loss += recon_loss
 
             if clip == 'Single':

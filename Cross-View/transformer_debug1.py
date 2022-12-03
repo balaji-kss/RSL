@@ -48,12 +48,13 @@ print('Drr ', Drr)
 print('Dtheta ', Dtheta)
 
 modelRoot = './ModelFile/crossView_NUCLA/'
-mode = '/tenc_exp9_dim50/'
+mode = '/tenc_exp9_dim50f/'
 
 saveModel = modelRoot + clip + mode + 'T36_fista01_openpose/'
 if not os.path.exists(saveModel):
     os.makedirs(saveModel)
 print('model:',mode, 'model path:', saveModel)
+
 num_class = 10
 setup = 'setup1' # v1,v2 train, v3 test;
 path_list = './data/CV/' + setup + '/'
@@ -63,10 +64,9 @@ trainSet = NUCLA_CrossView(root_list=path_list, dataType=dataType, clip=clip, ph
 trainloader = DataLoader(trainSet, batch_size=bz, shuffle=True, num_workers=num_workers)
 
 testSet = NUCLA_CrossView(root_list=path_list, dataType=dataType, clip=clip, phase='test', cam='2,1', T=T, setup=setup)
-testloader = DataLoader(testSet, batch_size=bz, shuffle=True, num_workers=num_workers)
+testloader = DataLoader(testSet, batch_size=bz, shuffle=False, num_workers=num_workers)
 
-#net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=fistaLam, gpu_id=gpu_id).cuda(gpu_id)
-net = Tenc_Cl(num_class=num_class, gpu_id=gpu_id).cuda(gpu_id)
+net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=fistaLam, gpu_id=gpu_id).cuda(gpu_id)
 
 def freeze_params(model):
 
@@ -80,25 +80,24 @@ def load_pretrain_models(net, model_path):
     print('**** load pretrained tenc ****')
     net = load_pretrainedModel(tenc_state_dict, net)
 
-    # print('**** freeze transformer_encoder params ****')
-    # freeze_params(net.transformer_encoder)
+    print('**** freeze transformer_encoder params ****')
+    freeze_params(net.transformer_encoder)
 
     return net
 
 net = load_pretrain_models(net, model_path)
-
 
 lr1 = 1e-4
 lr2 = 1e-4
 lr3 = 1e-3
 
 'for dy+cl:'
-optimizer = torch.optim.SGD(filter(lambda x: x.requires_grad, net.parameters()), lr=lr2, weight_decay=0.001, momentum=0.9)
-# optimizer = torch.optim.SGD([
-#                                 {'params':filter(lambda x: x.requires_grad, net.transformer_encoder.parameters()), 'lr':lr1},
-#                                 {'params':filter(lambda x: x.requires_grad, net.sparse_coding.parameters()), 'lr':lr2},
-#                                 {'params':filter(lambda x: x.requires_grad, net.Classifier.parameters()), 'lr':lr3}
-#                                 ], weight_decay=0.001, momentum=0.9)
+# optimizer = torch.optim.SGD(filter(lambda x: x.requires_grad, net.parameters()), lr=lr2, weight_decay=0.001, momentum=0.9)
+optimizer = torch.optim.SGD([
+                                {'params':filter(lambda x: x.requires_grad, net.transformer_encoder.parameters()), 'lr':lr1},
+                                {'params':filter(lambda x: x.requires_grad, net.sparse_coding.parameters()), 'lr':lr2},
+                                {'params':filter(lambda x: x.requires_grad, net.Classifier.parameters()), 'lr':lr3}
+                                ], weight_decay=0.001, momentum=0.9)
 
 scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[100, 200], gamma=0.4)
 Criterion = torch.nn.CrossEntropyLoss()
@@ -121,6 +120,7 @@ for epoch in range(0, Epoch+1):
     lossMSE = []
     count = 0
     pred_cnt = 0
+
     net.train()
     for i, sample in enumerate(trainloader):
 
@@ -142,7 +142,7 @@ for epoch in range(0, Epoch+1):
 
         'dy+cl:'
         # print('input_skeletons shape ', input_skeletons.shape) #(32, 36, 50)
-        actPred, output_skeletons, dyan_input = net(input_skeletons, t, lengths)
+        actPred, recon, dyan_input = net(input_skeletons, t, lengths)
         
         if clip == 'Single':
             actPred = actPred
@@ -153,14 +153,14 @@ for epoch in range(0, Epoch+1):
             pred = torch.argmax(actPred, 1)
 
         cls_loss = Criterion(actPred, gt_label)
-        mse_loss = mseLoss(output_skeletons, dyan_input)
+        mse_loss = mseLoss(recon, dyan_input)
         loss = lam1 * cls_loss + lam2 * mse_loss
         loss.backward()
         optimizer.step()
 
         lossVal.append(loss.data.item())
         lossCls.append(cls_loss.data.item())
-        #lossMSE.append(mse_loss.data.item())
+        lossMSE.append(mse_loss.data.item())
 
         ## Train acc
         correct = torch.eq(gt_label, pred).int()
@@ -177,7 +177,7 @@ for epoch in range(0, Epoch+1):
     train_acc = pred_cnt/count
     time_per_epoch = (end_time - start_time)/60.0 #mins
 
-    print('epoch:', epoch, ' |time: ', np.round(time_per_epoch, 3), '|loss:', loss_val, '|cls:', np.mean(np.array(lossCls)), '|mse:', np.mean(np.array(0.0)), '|acc:', train_acc)
+    print('epoch:', epoch, ' |time: ', np.round(time_per_epoch, 3), '|loss:', loss_val, '|cls:', np.mean(np.array(lossCls)), '|mse:', np.mean(np.array(lossMSE)), '|acc:', train_acc)
 
     scheduler.step()
     if epoch % 5 == 0:

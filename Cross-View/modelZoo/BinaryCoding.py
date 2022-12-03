@@ -323,11 +323,11 @@ class Tenc_SparseC_Cl(nn.Module):
         self.dataType = dataType
         self.fistaLam = fistaLam
         
-        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=None, ff_dim=2048, num_heads=5, num_layers=2, dropout=0.1)
+        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=50, is_input_proj=1, ff_dim=2048, num_heads=5, num_layers=2, dropout=0.1)
 
         self.Classifier = classificationGlobal(num_class=self.num_class, Npole=Npole, dataType=self.dataType)
 
-        self.sparse_coding = DyanEncoder(self.Drr, self.Dtheta,lam=self.fistaLam, gpu_id=self.gpu_id)
+        self.sparse_coding = DyanEncoder(self.Drr, self.Dtheta, lam=self.fistaLam, gpu_id=self.gpu_id)
 
     def key_padding_mask(self, lengths, max_len=None):
         """
@@ -341,27 +341,59 @@ class Tenc_SparseC_Cl(nn.Module):
                 .repeat(batch_size, 1)
                 .lt(lengths.unsqueeze(1)))
 
-    def src_att_mask(self, src_len):
+    def forward(self, x, T, lengths):
 
-        mask = (torch.triu(torch.ones(src_len, src_len)) == 1).transpose(0, 1)
-        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+        key_padding_mask = ~self.key_padding_mask(lengths, max_len=T).cuda()
+        src_mask = None
 
-        return mask
-
-    def forward(self, x, T, lengths=None):
-
-        if lengths is not None:
-            padding_mask = self.key_padding_mask(lengths, max_len=T)
-            tenc_out = self.transformer_encoder(x, padding_mask)
-        else:
-            tenc_out = self.transformer_encoder(x)
+        tenc_out = self.transformer_encoder(x, src_mask=src_mask, src_key_padding_mask=key_padding_mask)
 
         sparseCode, Dict, Reconstruction  = self.sparse_coding.forward2(tenc_out, T) # w.o. RH
 
         label = self.Classifier(sparseCode)
 
-        return label, sparseCode, Reconstruction, tenc_out
+        return label, Reconstruction, tenc_out
+
+class Dyan_Tenc(nn.Module):
+    def __init__(self, num_class, Npole, Drr, Dtheta, dataType,dim,fistaLam, gpu_id):
+        super(Dyan_Tenc, self).__init__()
+        self.num_class = num_class
+        self.Npole = Npole
+        self.Drr = Drr
+        self.Dtheta = Dtheta
+        self.gpu_id = gpu_id
+        self.dim = dim
+        self.dataType = dataType
+        self.fistaLam = fistaLam
+        self.sparseCoding = DyanEncoder(self.Drr, self.Dtheta, lam=self.fistaLam, gpu_id=self.gpu_id)
+
+        self.transformer_encoder = TransformerEncoder(embed_dim=161, embed_proj_dim=None, ff_dim=2048, num_heads=7, num_layers=2, dropout=0.1)
+
+        self.dropout = nn.Dropout(p=0.1)
+        self.fc1 = nn.Linear(161*50, 1024)
+        self.fc2 = nn.Linear(1024, 256)
+        self.fc3 = nn.Linear(256, 64)
+        self.cls = nn.Linear(64, self.num_class)
+        self.relu = nn.LeakyReLU()
+
+    def forward(self, x, T):
+
+        sparseCode, Dict, Reconstruction  = self.sparseCoding.forward2(x, T) # w.o. RH
+
+        sparseCode = sparseCode.permute(0, 2, 1) #(B, 161, 50) --> (B, 50, 161)
+        tenc_out = self.transformer_encoder(sparseCode, src_mask=None, src_key_padding_mask=None)
         
+        tenc_out = self.relu(tenc_out) #(B, 50, 161)
+        tenc_out = self.dropout(tenc_out)
+
+        tenc_out = tenc_out.view(tenc_out.shape[0],-1)  #flatten (B, 161 * 50)
+        tenc_out = self.relu(self.fc1(tenc_out)) # (B, 1024)
+        tenc_out = self.relu(self.fc2(tenc_out)) # (B, 256)
+        tenc_out = self.relu(self.fc3(tenc_out)) # (B, 64)
+        label = self.cls(tenc_out) # (B, 10)
+
+        return label, sparseCode, Reconstruction
+
 class Tenc_Cl(nn.Module):
     def __init__(self, num_class, gpu_id):
         super(Tenc_Cl, self).__init__()

@@ -32,7 +32,7 @@ class PositionalEncoding(nn.Module):
 
 class TransformerEncoder(nn.Module):
     
-    def __init__(self, embed_dim=25*2, is_input_proj=None, is_output_proj=None, embed_proj_dim=None, ff_dim=256, num_heads=5, num_layers=6, dropout=0.1):
+    def __init__(self, embed_dim=25*2, is_input_proj=None, is_output_proj=None, embed_proj_dim=None, ff_dim=256, num_heads=5, num_layers=6, dropout=0.1, seq_len=36):
         super().__init__()
         self.embed_dim = embed_dim
         if embed_proj_dim is None:
@@ -46,7 +46,8 @@ class TransformerEncoder(nn.Module):
         self.num_layers = num_layers
         self.is_input_proj = is_input_proj
         self.is_output_proj = is_output_proj
-
+        self.seq_len = seq_len
+        
         if self.is_input_proj:
             print('input projection present encoder: ', self.embed_proj_dim)
             self.input_layer = nn.Linear(self.embed_dim, self.embed_proj_dim)
@@ -79,8 +80,6 @@ class TransformerEncoder(nn.Module):
 
         tenc_out = self.transformer_encoder(pe_out, mask=src_mask, src_key_padding_mask=src_key_padding_mask)
         
-        #tenc_out = self.act(tenc_out)
-
         if self.is_output_proj:
             tenc_out = self.output_layer(tenc_out)
 
