@@ -352,7 +352,7 @@ class Tenc_SparseC_Cl(nn.Module):
 
         label = self.Classifier(sparseCode)
 
-        return label, Reconstruction, tenc_out
+        return label, sparseCode, Reconstruction, tenc_out
 
 class Dyan_Tenc(nn.Module):
     def __init__(self, num_class, Npole, Drr, Dtheta, dataType,dim,fistaLam, gpu_id):

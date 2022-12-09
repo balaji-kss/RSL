@@ -29,10 +29,10 @@ def testing(dataloader, net, gpu_id, clip):
                 input = skeleton.reshape(skeleton.shape[0]*skeleton.shape[1], t, -1)
 		
 
-            label, recon = net(input, t) # 'DY + CL'
-            dyan_inp = input
+            # label, recon = net(input, t) # 'DY + CL'
+            # dyan_inp = input
 
-            #label, recon, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL'
+            label, recon, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL'
             recon_loss = mseLoss(recon, dyan_inp).data.item()
             global_recon_loss += recon_loss
 
@@ -67,7 +67,7 @@ def visualize_cls(dataloader, net, gpu_id, clip):
     global_recon_loss = 0
     sparseCs, recons, dyan_inps, net_inps = [], [], [], []
 
-    #net.eval()
+    net.eval()
     with torch.no_grad():
         for i, sample in enumerate(dataloader):
 
@@ -88,7 +88,7 @@ def visualize_cls(dataloader, net, gpu_id, clip):
             # label, sparseC, dyan_out = net(input, t) # 'DY + CL'
             # dyan_inp = input
 
-            #label, sparseC, recon, dyan_inp = net(input, t) # 'Tenc + DY + CL
+            label, sparseC, recon, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL
             
             recon_loss = mseLoss(recon, dyan_inp).data.item()
             global_recon_loss += recon_loss
@@ -121,7 +121,6 @@ def visualize_cls(dataloader, net, gpu_id, clip):
             recon_loss_avg = global_recon_loss/count
             #print('recon_loss: ', np.round(recon_loss, 5), ' recon_loss_avg: ', np.round(recon_loss_avg, 5))
             print('i ', i)            
-            break
 
     write_lst(sc_txt_path, sparseCs)
     write_lst(y_txt_path, recons)
@@ -294,21 +293,21 @@ if __name__ == "__main__":
     dataType = '2D'
     map_loc = "cuda:" + str(gpu_id)
 
-    testSet = NUCLA_CrossView(root_list=path_list, dataType=dataType, clip=clip, phase='test', cam='2,1', T=T, setup=setup)
+    testSet = NUCLA_CrossView(root_list=path_list, dataType=dataType, clip=clip, phase='train', cam='2,1', T=T, setup=setup)
     testloader = DataLoader(testSet, batch_size=32, shuffle=False, num_workers=num_workers)
 
     if recon:
         model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2_dim50/300.pth'
     elif transformer:
-        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_dyan_exp5_lam0.5/T36_fista01_openpose/200.pth'
+        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_exp9_dim50/T36_fista01_openpose/300.pth'
     else:
         model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/dyan_cl/T36_fista01_openpose/60.pth'
 
-    sc_txt_path = os.path.join(model_path.rsplit('/', 1)[0], 'sc.txt')
-    xtxt_path = os.path.join(model_path.rsplit('/', 1)[0], 'skel.txt')
-    ytxt_path = os.path.join(model_path.rsplit('/', 1)[0], 'dyan_inp.txt')
-    y_txt_path = os.path.join(model_path.rsplit('/', 1)[0], 'recon.txt')
-    x_txt_path = os.path.join(model_path.rsplit('/', 1)[0], 'tdec_out.txt')
+    sc_txt_path = os.path.join(model_path.rsplit('/', 1)[0], 'trsc.txt')
+    xtxt_path = os.path.join(model_path.rsplit('/', 1)[0], 'trskel.txt')
+    ytxt_path = os.path.join(model_path.rsplit('/', 1)[0], 'trdyan_inp.txt')
+    y_txt_path = os.path.join(model_path.rsplit('/', 1)[0], 'trrecon.txt')
+    x_txt_path = os.path.join(model_path.rsplit('/', 1)[0], 'trtdec_out.txt')
     stateDict = torch.load(model_path, map_location=map_loc)['state_dict']
 
     if recon:
@@ -319,7 +318,7 @@ if __name__ == "__main__":
     elif transformer:
         Drr = stateDict['sparse_coding.rr'].float()
         Dtheta = stateDict['sparse_coding.theta'].float()
-        net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=0.5, gpu_id=gpu_id).cuda(gpu_id)
+        net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=0.1, gpu_id=gpu_id).cuda(gpu_id)
     else:
         Drr = stateDict['sparseCoding.rr'].float()
         Dtheta = stateDict['sparseCoding.theta'].float()
@@ -329,6 +328,7 @@ if __name__ == "__main__":
     net.load_state_dict(stateDict)
 
     #Acc = testing(testloader, net, gpu_id, clip)
-    #print('Acc:%.4f' % Acc)
+    # Acc = visualize_cls(testloader, net, gpu_id, clip)
+    # print('Acc:%.4f' % Acc)
     visualize_reconstruct(testloader, net, gpu_id, clip)
     
