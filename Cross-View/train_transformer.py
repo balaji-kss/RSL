@@ -15,7 +15,7 @@ lam1 = 2 # cls loss
 lam2 = 1 # mse loss
 fistaLam = 0.1
 N = 80 * 2
-Epoch = 300
+Epoch = 600
 # num_class = 10
 dataType = '2D'
 clip = 'Single'
@@ -50,7 +50,7 @@ print('Drr ', Drr)
 print('Dtheta ', Dtheta)
 
 modelRoot = './ModelFile/crossView_NUCLA/'
-mode = '/sc_tenc_exp10/'
+mode = '/sc_tenc_dyanf_exp10/'
 
 saveModel = modelRoot + clip + mode + 'T36_fista01_openpose/'
 if not os.path.exists(saveModel):
@@ -86,6 +86,9 @@ def load_pretrain_models(net, model_path):
     # print('**** freeze transformer_encoder params ****')
     # freeze_params(net.transformer_encoder)
 
+    print('**** freeze dyan params ****')
+    freeze_params(net.sparseCoding)
+
     return net
 
 net = load_pretrain_models(net, model_path)
@@ -102,7 +105,7 @@ optimizer = torch.optim.SGD(filter(lambda x: x.requires_grad, net.parameters()),
 #                                 {'params':filter(lambda x: x.requires_grad, net.Classifier.parameters()), 'lr':lr3}
 #                                 ], weight_decay=0.001, momentum=0.9)
 
-scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[100, 200], gamma=0.4)
+scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[150, 300, 450], gamma=0.4)
 Criterion = torch.nn.CrossEntropyLoss()
 mseLoss = torch.nn.MSELoss()
 L1loss = torch.nn.SmoothL1Loss()
@@ -185,10 +188,10 @@ for epoch in range(0, Epoch+1):
     print('epoch:', epoch, ' |time: ', np.round(time_per_epoch, 3), '|loss:', loss_val, '|cls:', np.mean(np.array(lossCls)), '|mse:', np.mean(np.array(lossMSE)), '|acc:', train_acc)
 
     scheduler.step()
-    if epoch % 5 == 0:
+    if epoch % 10 == 0:
         torch.save({'epoch': epoch + 1, 'state_dict': net.state_dict(),
                     'optimizer': optimizer.state_dict()}, saveModel + str(epoch) + '.pth')
-    if epoch % 5 == 0:
+    if epoch % 10 == 0:
         Acc = testing(testloader, net, gpu_id, clip)
 
         print('testing epoch:',epoch, 'Acc:%.4f'% Acc)

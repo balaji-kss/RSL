@@ -29,10 +29,10 @@ def testing(dataloader, net, gpu_id, clip):
                 input = skeleton.reshape(skeleton.shape[0]*skeleton.shape[1], t, -1)
 		
 
-            # label, recon = net(input, t) # 'DY + CL'
-            # dyan_inp = input
+            label, recon = net(input, t) # 'DY + CL'
+            dyan_inp = input
 
-            label, recon, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL'
+            #label, recon, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL'
             recon_loss = mseLoss(recon, dyan_inp).data.item()
             global_recon_loss += recon_loss
 
@@ -293,13 +293,15 @@ if __name__ == "__main__":
     dataType = '2D'
     map_loc = "cuda:" + str(gpu_id)
 
-    testSet = NUCLA_CrossView(root_list=path_list, dataType=dataType, clip=clip, phase='train', cam='2,1', T=T, setup=setup)
+    testSet = NUCLA_CrossView(root_list=path_list, dataType=dataType, clip=clip, phase='test', cam='2,1', T=T, setup=setup)
     testloader = DataLoader(testSet, batch_size=32, shuffle=False, num_workers=num_workers)
 
     if recon:
-        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2_dim50/300.pth'
+        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2_bi/300.pth'
     elif transformer:
-        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_exp9_dim50/T36_fista01_openpose/300.pth'
+        # model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_exp9_dim50/T36_fista01_openpose/300.pth'
+        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/sc_tenc_dyanf_exp10/T36_fista01_openpose/30.pth'
+
     else:
         model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/dyan_cl/T36_fista01_openpose/60.pth'
 
@@ -314,11 +316,14 @@ if __name__ == "__main__":
         Drr = stateDict['sparse_coding.rr'].float()
         Dtheta = stateDict['sparse_coding.theta'].float()
         net = Dyan_Autoencoder(Drr=Drr, Dtheta=Dtheta, dim=2, dataType=dataType, \
-                    Inference=True, gpu_id=gpu_id, fistaLam=0.1).cuda(gpu_id)
+                    Inference=True, gpu_id=gpu_id, fistaLam=0.1, is_binary=True).cuda(gpu_id)
     elif transformer:
-        Drr = stateDict['sparse_coding.rr'].float()
-        Dtheta = stateDict['sparse_coding.theta'].float()
-        net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=0.1, gpu_id=gpu_id).cuda(gpu_id)
+        Drr = stateDict['sparseCoding.rr'].float()
+        Dtheta = stateDict['sparseCoding.theta'].float()
+        print('Drr ', Drr)
+        print('Dtheta ', Dtheta)
+        # net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=0.1, gpu_id=gpu_id).cuda(gpu_id)
+        net = Dyan_Tenc(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=fistaLam, gpu_id=gpu_id).cuda(gpu_id)
     else:
         Drr = stateDict['sparseCoding.rr'].float()
         Dtheta = stateDict['sparseCoding.theta'].float()

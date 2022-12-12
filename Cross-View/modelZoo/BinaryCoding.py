@@ -379,6 +379,7 @@ class Dyan_Tenc(nn.Module):
     def forward(self, x, T):
 
         sparseCode, Dict, Reconstruction  = self.sparseCoding.forward2(x, T) # w.o. RH
+        sparseCode = sparseCode.detach()
         
         sparseCode = sparseCode.permute(0, 2, 1) #(B, 161, 50) --> (B, 50, 161)
         
@@ -471,7 +472,7 @@ class MaskedMSELoss(nn.Module):
         return self.mse_loss(masked_pred, masked_true)
 
 class Dyan_Autoencoder(nn.Module):
-    def __init__(self, Drr, Dtheta, dim, dataType, Inference, gpu_id, fistaLam):
+    def __init__(self, Drr, Dtheta, dim, dataType, Inference, gpu_id, fistaLam, is_binary=False):
         super(Dyan_Autoencoder, self).__init__()
 
         self.Drr = Drr
@@ -481,8 +482,13 @@ class Dyan_Autoencoder(nn.Module):
         self.dim = dim
         self.dataType = dataType
         self.fistaLam = fistaLam
+        self.is_binary = is_binary
 
-        print('***** Dyan Autoencoder just mask *****')
+        print('***** Dyan Autoencoder *****')
+
+        if self.is_binary:
+            print('*** Binarization ***')
+            self.BinaryCoding = GumbelSigmoid()
 
         self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=50, is_input_proj=1, ff_dim=2048, num_heads=5, num_layers=2, dropout=0.1)
         self.sparse_coding = DyanEncoder(self.Drr, self.Dtheta,  lam=fistaLam, gpu_id=self.gpu_id)
@@ -556,16 +562,16 @@ class Dyan_Autoencoder(nn.Module):
         src_mask = None
 
         tenc_out = self.transformer_encoder(x, src_mask=src_mask, src_key_padding_mask=key_padding_mask)
-        #print('tenc_out shape ', tenc_out.shape)
 
         sparse_code, Dict, _ = self.sparse_coding.forward2(tenc_out, T)
-        #print('sparse_code shape ', sparse_code.shape)
+
+        if self.is_binary:
+            binary_code = self.BinaryCoding(sparse_code ** 2, force_hard=True, temperature=0.1, inference=self.Inference)
+            sparse_code = sparse_code * binary_code
 
         dyan_out = torch.matmul(Dict, sparse_code)
-        #print('dyan_out shape ', dyan_out.shape)
 
         tdec_out = self.transformer_decoder(dyan_out, tgt_mask=self.tgt_mask, tgt_key_padding_mask=key_padding_mask)
-        #print('tdec_out shape ', tdec_out.shape)
 
         return dyan_out, tenc_out, tdec_out
 

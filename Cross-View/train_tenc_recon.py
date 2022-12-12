@@ -15,6 +15,7 @@ Epoch = 300
 fistaLam = 0.1
 dataType = '2D'
 clip = 'Single'
+is_binary = True
 
 if clip == 'Single':
     num_workers = 8
@@ -34,7 +35,7 @@ Dtheta = torch.from_numpy(Dtheta).float()
 
 modelRoot = './ModelFile/crossView_NUCLA/'
 
-saveModel = modelRoot + clip +  '/tenc_recon_n2_dim25/'
+saveModel = modelRoot + clip +  '/tenc_recon_n2_bi/'
 if not os.path.exists(saveModel):
     os.makedirs(saveModel)
 print('model path:', saveModel)
@@ -52,7 +53,7 @@ testSet = NUCLA_CrossView(root_list=path_list, dataType=dataType, clip=clip, pha
 testloader = DataLoader(testSet, batch_size=bz, shuffle=False, num_workers=num_workers)
 
 net = Dyan_Autoencoder(Drr=Drr, Dtheta=Dtheta, dim=2, dataType=dataType, \
-                    Inference=True, gpu_id=gpu_id, fistaLam=fistaLam).cuda(gpu_id)
+                    Inference=True, gpu_id=gpu_id, fistaLam=fistaLam, is_binary=is_binary).cuda(gpu_id)
 
 lr = 1e-2
 
