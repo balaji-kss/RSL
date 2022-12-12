@@ -311,23 +311,27 @@ class classificationWSparseCode(nn.Module):
         return label, sparseCode, Reconstruction
 
 class Tenc_SparseC_Cl(nn.Module):
-    def __init__(self, num_class, Npole, Drr, Dtheta, dataType, dim, fistaLam, gpu_id):
+    def __init__(self, num_class, Npole, Drr, Dtheta, dataType, dim, Inference, fistaLam, gpu_id, is_binary=False):
         super(Tenc_SparseC_Cl, self).__init__()
         self.num_class = num_class
         self.Npole = Npole
         self.Drr = Drr
         self.Dtheta = Dtheta
-        # self.T = T
         self.gpu_id = gpu_id
         self.dim = dim
         self.dataType = dataType
         self.fistaLam = fistaLam
-        
+        self.Inference = Inference
+        self.is_binary = is_binary
+
         self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=50, is_input_proj=1, ff_dim=2048, num_heads=5, num_layers=2, dropout=0.1)
 
-        self.Classifier = classificationGlobal(num_class=self.num_class, Npole=Npole, dataType=self.dataType)
-
         self.sparse_coding = DyanEncoder(self.Drr, self.Dtheta, lam=self.fistaLam, gpu_id=self.gpu_id)
+
+        if self.is_binary:
+            self.BinaryCoding = GumbelSigmoid()
+
+        self.Classifier = classificationGlobal(num_class=self.num_class, Npole=Npole, dataType=self.dataType)
 
     def key_padding_mask(self, lengths, max_len=None):
         """
@@ -348,11 +352,18 @@ class Tenc_SparseC_Cl(nn.Module):
 
         tenc_out = self.transformer_encoder(x, src_mask=src_mask, src_key_padding_mask=key_padding_mask)
 
-        sparseCode, Dict, Reconstruction  = self.sparse_coding.forward2(tenc_out, T) # w.o. RH
+        sparseCode, Dict, _  = self.sparse_coding.forward2(tenc_out, T) # w.o. RH
 
-        label = self.Classifier(sparseCode)
+        if self.is_binary:
+            binaryCode = self.BinaryCoding(sparseCode**2, force_hard=True, temperature=0.1, inference=self.Inference)
+            prod = sparseCode * binaryCode
+            Reconstruction = torch.matmul(Dict, prod)
+            label = self.Classifier(binaryCode)
+        else:
+            Reconstruction = torch.matmul(Dict, sparseCode)
+            label = self.Classifier(sparseCode)
 
-        return label, sparseCode, Reconstruction, tenc_out
+        return label, binaryCode, Reconstruction, tenc_out
 
 class Dyan_Tenc(nn.Module):
     def __init__(self, num_class, Npole, Drr, Dtheta, dataType,dim,fistaLam, gpu_id):
@@ -573,7 +584,7 @@ class Dyan_Autoencoder(nn.Module):
 
         tdec_out = self.transformer_decoder(dyan_out, tgt_mask=self.tgt_mask, tgt_key_padding_mask=key_padding_mask)
 
-        return dyan_out, tenc_out, tdec_out
+        return dyan_out, binary_code, tenc_out, tdec_out
 
 class Fullclassification(nn.Module):
     def __init__(self, num_class, Npole, num_binary, Drr, Dtheta,dim, dataType, Inference, gpu_id, fistaLam):

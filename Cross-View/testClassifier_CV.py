@@ -32,7 +32,7 @@ def testing(dataloader, net, gpu_id, clip):
             label, recon = net(input, t) # 'DY + CL'
             dyan_inp = input
 
-            #label, recon, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL'
+            # label, bi, recon, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL'
             recon_loss = mseLoss(recon, dyan_inp).data.item()
             global_recon_loss += recon_loss
 
@@ -164,7 +164,7 @@ def test_reconstruct(dataloader, net, gpu_id, clip):
                 t = skeleton.shape[2]
                 input = skeleton.reshape(skeleton.shape[0]*skeleton.shape[1], t, -1)
 
-            recon, dyan_inp, tdec_out = net(input, t, lengths)
+            recon, bi, dyan_inp, tdec_out = net(input, t, lengths)
             
             dyan_mse = mseLoss(recon, dyan_inp).data.item()
             input_mse = mseLoss(tdec_out, input).data.item()

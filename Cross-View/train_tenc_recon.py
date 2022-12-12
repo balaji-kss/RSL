@@ -35,7 +35,7 @@ Dtheta = torch.from_numpy(Dtheta).float()
 
 modelRoot = './ModelFile/crossView_NUCLA/'
 
-saveModel = modelRoot + clip +  '/tenc_recon_n2_bi/'
+saveModel = modelRoot + clip +  '/tenc_recon_n2_bi_1/'
 if not os.path.exists(saveModel):
     os.makedirs(saveModel)
 print('model path:', saveModel)
@@ -62,11 +62,12 @@ optimizer = torch.optim.SGD(filter(lambda x: x.requires_grad, net.parameters()),
 scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[100, 200], gamma=0.4)
 mseLoss = torch.nn.MSELoss()
 maskedmseLoss = MaskedMSELoss()
+L1loss = torch.nn.SmoothL1Loss()
 
 LOSS = []
 ACC = []
 lam1, lam2 = 1, 10
-
+alpha = 1
 print('Experiment config setup, clip, lam1, lam2, lr, lr_2, fistaLam: ', setup, clip, lam1, lam2, lr, fistaLam)
 
 for epoch in range(0, Epoch + 1):
@@ -76,7 +77,7 @@ for epoch in range(0, Epoch + 1):
     loss_dyan = []
     loss_inp_recon = []
     total_loss = []
-
+    loss_bi = []
     net.train()
 
     for i, sample in enumerate(trainloader):
@@ -100,27 +101,29 @@ for epoch in range(0, Epoch + 1):
             t = skeletons.shape[2]
             input_skeletons = skeletons.reshape(skeletons.shape[0]*skeletons.shape[1], t, -1) #bz,clip, T, 25, 2 --> bz, clip, T, 50
 
-        dyan_out, tenc_out, tdec_out = net(input_skeletons, t, lengths)
-        
+        dyan_out, bi, tenc_out, tdec_out = net(input_skeletons, t, lengths)
+        bi_gt = torch.zeros_like(bi).cuda(gpu_id)        
         dyan_mse = mseLoss(dyan_out, tenc_out)
         input_mse = maskedmseLoss(tdec_out, input_skeletons, pad_mask_expand)
-
-        loss = lam1 * dyan_mse + lam2 * input_mse 
+        l1loss = L1loss(bi, bi_gt)
+        loss = lam1 * dyan_mse + lam2 * input_mse + alpha * l1loss
         loss.backward()
 
         optimizer.step()
         total_loss.append(loss.data.item())
         loss_dyan.append(dyan_mse.data.item())
         loss_inp_recon.append(input_mse.data.item())
+        loss_bi.append(l1loss.data.item())
 
     total_loss_avg = np.mean(np.array(total_loss))
     loss_dyan_avg = np.mean(np.array(loss_dyan))
     loss_inp_recon_avg = np.mean(np.array(loss_inp_recon))
+    loss_bi_avg = np.mean(np.array(loss_bi))
 
     end_time = time.time()
     time_per_epoch = (end_time - start_time)/60.0 #mins
 
-    print('epoch: ', epoch, ' |time: ', np.round(time_per_epoch, 3), ' mins |loss:', np.round(total_loss_avg, 6), ' |dyan_mse:', np.round(loss_dyan_avg, 6), ' |inp_recon_mse:', np.round(loss_inp_recon_avg, 6))
+    print('epoch: ', epoch, ' |time: ', np.round(time_per_epoch, 3), ' mins |loss:', np.round(total_loss_avg, 6), ' |dyan_mse:', np.round(loss_dyan_avg, 6), ' |inp_recon_mse:', np.round(loss_inp_recon_avg, 6), ' |bi_l1:', np.round(loss_bi_avg, 6))
 
     scheduler.step()
     if epoch % 10 == 0:
