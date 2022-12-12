@@ -206,7 +206,7 @@ def visualize_reconstruct(dataloader, net, gpu_id, clip):
                 t = skeleton.shape[2]
                 input = skeleton.reshape(skeleton.shape[0]*skeleton.shape[1], t, -1)
 
-            recon, dyan_inp, tdec_out = net(input, t, lengths)
+            recon, bi, dyan_inp, tdec_out = net(input, t, lengths)
             
             dyan_mse = mseLoss(recon, dyan_inp).data.item()
             input_mse = mseLoss(tdec_out, input).data.item()
@@ -284,8 +284,8 @@ if __name__ == "__main__":
     N = 80*2
     T = 36
     num_class = 10
-    transformer = 0
-    recon = 1
+    transformer = 1
+    recon = 0
     dataset = 'NUCLA'
     clip = 'Single'
     setup = 'setup1' # v1,v2 train, v3 test;
@@ -297,19 +297,19 @@ if __name__ == "__main__":
     testloader = DataLoader(testSet, batch_size=32, shuffle=False, num_workers=num_workers)
 
     if recon:
-        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2_bi/300.pth'
+        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2_bi_1/290.pth'
     elif transformer:
         # model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_exp9_dim50/T36_fista01_openpose/300.pth'
-        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/sc_tenc_dyanf_exp10/T36_fista01_openpose/30.pth'
+        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_sc_bi_exp11/T36_fista01_openpose/300.pth'
 
     else:
         model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/dyan_cl/T36_fista01_openpose/60.pth'
 
-    sc_txt_path = os.path.join(model_path.rsplit('/', 1)[0], 'trsc.txt')
-    xtxt_path = os.path.join(model_path.rsplit('/', 1)[0], 'trskel.txt')
-    ytxt_path = os.path.join(model_path.rsplit('/', 1)[0], 'trdyan_inp.txt')
-    y_txt_path = os.path.join(model_path.rsplit('/', 1)[0], 'trrecon.txt')
-    x_txt_path = os.path.join(model_path.rsplit('/', 1)[0], 'trtdec_out.txt')
+    sc_txt_path = os.path.join(model_path.rsplit('/', 1)[0], 'sc.txt')
+    xtxt_path = os.path.join(model_path.rsplit('/', 1)[0], 'skel.txt')
+    ytxt_path = os.path.join(model_path.rsplit('/', 1)[0], 'dyan_inp.txt')
+    y_txt_path = os.path.join(model_path.rsplit('/', 1)[0], 'recon.txt')
+    x_txt_path = os.path.join(model_path.rsplit('/', 1)[0], 'tdec_out.txt')
     stateDict = torch.load(model_path, map_location=map_loc)['state_dict']
 
     if recon:
@@ -318,12 +318,14 @@ if __name__ == "__main__":
         net = Dyan_Autoencoder(Drr=Drr, Dtheta=Dtheta, dim=2, dataType=dataType, \
                     Inference=True, gpu_id=gpu_id, fistaLam=0.1, is_binary=True).cuda(gpu_id)
     elif transformer:
-        Drr = stateDict['sparseCoding.rr'].float()
-        Dtheta = stateDict['sparseCoding.theta'].float()
+        Drr = stateDict['sparse_coding.rr'].float()
+        Dtheta = stateDict['sparse_coding.theta'].float()
+        is_binary = True
         print('Drr ', Drr)
         print('Dtheta ', Dtheta)
-        # net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=0.1, gpu_id=gpu_id).cuda(gpu_id)
-        net = Dyan_Tenc(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=fistaLam, gpu_id=gpu_id).cuda(gpu_id)
+        print('is_binary ', is_binary)
+        net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=0.1, Inference=True, gpu_id=gpu_id, is_binary=is_binary).cuda(gpu_id)
+        # net = Dyan_Tenc(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=fistaLam, gpu_id=gpu_id).cuda(gpu_id)
     else:
         Drr = stateDict['sparseCoding.rr'].float()
         Dtheta = stateDict['sparseCoding.theta'].float()
@@ -333,7 +335,7 @@ if __name__ == "__main__":
     net.load_state_dict(stateDict)
 
     #Acc = testing(testloader, net, gpu_id, clip)
-    # Acc = visualize_cls(testloader, net, gpu_id, clip)
+    Acc = visualize_cls(testloader, net, gpu_id, clip)
     # print('Acc:%.4f' % Acc)
-    visualize_reconstruct(testloader, net, gpu_id, clip)
+    #visualize_reconstruct(testloader, net, gpu_id, clip)
     
