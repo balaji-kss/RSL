@@ -11,9 +11,9 @@ map_loc = "cuda:" + str(gpu_id)
 # T = 36
 dataset = 'NUCLA'
 
-Alpha = 0.1 # bi loss
-lam1 = 1 # cls loss
-lam2 = 0.5 # mse loss
+Alpha = 0.2 # bi loss
+lam1 = 2 # cls loss
+lam2 = 1 # mse loss
 fistaLam = 0.1
 N = 80 * 2
 Epoch = 300
@@ -34,7 +34,7 @@ setup = 'setup1' # v1,v2 train, v3 test;
 fusion = False
 'initialized params'
 
-model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2_bi/300.pth'
+model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2_bi_1/300.pth'
 
 #model_path = './pretrained/' + setup + '/' + clip + '/pretrainedDyan.pth'
 stateDict = torch.load(model_path, map_location=map_loc)['state_dict']
@@ -51,7 +51,7 @@ print('Drr ', Drr)
 print('Dtheta ', Dtheta)
 
 modelRoot = './ModelFile/crossView_NUCLA/'
-mode = '/tenc_sc_bi_exp11/'
+mode = '/tenc_sc_bi_exp11_1/'
 
 saveModel = modelRoot + clip + mode + 'T36_fista01_openpose/'
 if not os.path.exists(saveModel):

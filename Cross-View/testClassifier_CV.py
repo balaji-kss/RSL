@@ -29,10 +29,10 @@ def testing(dataloader, net, gpu_id, clip):
                 input = skeleton.reshape(skeleton.shape[0]*skeleton.shape[1], t, -1)
 		
 
-            label, recon = net(input, t) # 'DY + CL'
-            dyan_inp = input
+            # label, recon = net(input, t) # 'DY + CL'
+            # dyan_inp = input
 
-            # label, bi, recon, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL'
+            label, bi, recon, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL'
             recon_loss = mseLoss(recon, dyan_inp).data.item()
             global_recon_loss += recon_loss
 
@@ -178,7 +178,7 @@ def test_reconstruct(dataloader, net, gpu_id, clip):
     dyan_loss_avg = global_dyan_loss/count
 
     input_loss_avg = np.round(input_loss_avg, 6)
-    dyan_loss_avg = np.round(dyan_loss_avg, )
+    dyan_loss_avg = np.round(dyan_loss_avg, 6)
     
     return dyan_loss_avg, input_loss_avg
 

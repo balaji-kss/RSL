@@ -33,7 +33,7 @@ fusion = False
 'initialized params'
 
 #model_path = './pretrained/' + setup + '/' + clip + '/pretrainedDyan.pth'
-model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/sc_tenc_dyanf_exp10/T36_fista01_openpose/600.pth'
+model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/sc_tenc_dyanf_exp10_1/T36_fista01_openpose/420.pth'
 
 stateDict = torch.load(model_path, map_location=map_loc)['state_dict']
 Drr = stateDict['sparseCoding.rr'].float()
@@ -49,7 +49,7 @@ print('Drr ', Drr)
 print('Dtheta ', Dtheta)
 
 modelRoot = './ModelFile/crossView_NUCLA/'
-mode = '/sc_tenc_dyanf_exp10_1/'
+mode = '/sc_tenc_dyanf_exp10_2/'
 
 saveModel = modelRoot + clip + mode + 'T36_fista01_openpose/'
 if not os.path.exists(saveModel):
@@ -92,12 +92,12 @@ net = load_pretrain_models(net, model_path)
 
 lr1 = 1e-4
 lr2 = 1e-4
-lr3 = 5e-4
+lr3 = 1e-3
 
 'for dy+cl:'
 optimizer = torch.optim.SGD(filter(lambda x: x.requires_grad, net.parameters()), lr=lr3, weight_decay=0.001, momentum=0.9)
 
-scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[150, 300, 450], gamma=0.4)
+scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[150, 300, 450], gamma=0.3)
 Criterion = torch.nn.CrossEntropyLoss()
 mseLoss = torch.nn.MSELoss()
 L1loss = torch.nn.SmoothL1Loss()

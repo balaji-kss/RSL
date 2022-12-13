@@ -159,7 +159,7 @@ class NUCLA_CrossView(Dataset):
         print('before train len ', len(self.samples_list))
         random.seed(10)
         random.shuffle(self.samples_list)
-        self.samples_list = self.samples_list[: len(self.samples_list)//2]
+        #self.samples_list = self.samples_list[: len(self.samples_list)//2]
         print('after train len ', len(self.samples_list), self.samples_list[::10])
 
         self.test_list= np.loadtxt(os.path.join(self.root_list, f"{self.test_view}_test.list"), dtype=str)
@@ -172,7 +172,7 @@ class NUCLA_CrossView(Dataset):
         print('before test len ', len(temp))
         random.seed(10)
         random.shuffle(temp)
-        temp = temp[: len(temp)//2]
+        #temp = temp[: len(temp)//2]
         print('after test len ', len(temp), temp[::10])
 
         if self.phase == 'test':
