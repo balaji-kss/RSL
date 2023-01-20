@@ -15,7 +15,7 @@ Epoch = 300
 fistaLam = 0.1
 dataType = '2D'
 clip = 'Single'
-is_binary = True
+is_binary = False
 
 if clip == 'Single':
     num_workers = 8
@@ -35,7 +35,7 @@ Dtheta = torch.from_numpy(Dtheta).float()
 
 modelRoot = './ModelFile/crossView_NUCLA/'
 
-saveModel = modelRoot + clip +  '/tenc_recon_n2_bi_2/'
+saveModel = modelRoot + clip +  '/tenc_recon_conv_dec/'
 if not os.path.exists(saveModel):
     os.makedirs(saveModel)
 print('model path:', saveModel)
@@ -52,7 +52,7 @@ trainloader = DataLoader(trainSet, batch_size=bz, shuffle=True, num_workers=num_
 testSet = NUCLA_CrossView(root_list=path_list, dataType=dataType, clip=clip, phase='test', cam='2,1', T=T, setup=setup)
 testloader = DataLoader(testSet, batch_size=bz, shuffle=False, num_workers=num_workers)
 
-net = Dyan_Autoencoder(Drr=Drr, Dtheta=Dtheta, dim=2, dataType=dataType, \
+net = Dyan_Autoencoder_reduce(Drr=Drr, Dtheta=Dtheta, dim=2, dataType=dataType, \
                     Inference=True, gpu_id=gpu_id, fistaLam=fistaLam, is_binary=is_binary).cuda(gpu_id)
 
 lr = 1e-2
@@ -105,8 +105,14 @@ for epoch in range(0, Epoch + 1):
         bi_gt = torch.zeros_like(bi).cuda(gpu_id)        
         dyan_mse = mseLoss(dyan_out, tenc_out)
         input_mse = maskedmseLoss(tdec_out, input_skeletons, pad_mask_expand)
-        l1loss = L1loss(bi, bi_gt)
+
+        if is_binary:
+            l1loss = L1loss(bi, bi_gt)
+        else:
+            l1loss = L1loss(bi_gt, bi_gt) # basically zero
+
         loss = lam1 * dyan_mse + lam2 * input_mse + alpha * l1loss
+        
         loss.backward()
 
         optimizer.step()
@@ -130,6 +136,6 @@ for epoch in range(0, Epoch + 1):
         torch.save({'epoch': epoch + 1, 'state_dict': net.state_dict(),
                     'optimizer': optimizer.state_dict()}, saveModel + str(epoch) + '.pth')
         dyn_recon_loss, input_recon_loss = test_reconstruct(testloader, net, gpu_id, clip)
-        print('testing epoch:', epoch, ' |dyan_mse:', dyn_recon_loss, ' |inp_recon_mse:', input_recon_loss)
+        print('testing epoch:', epoch, ' |val_dyan_mse:', dyn_recon_loss, ' |val_inp_recon_mse:', input_recon_loss)
 
 print('done')

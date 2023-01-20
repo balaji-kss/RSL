@@ -482,6 +482,74 @@ class MaskedMSELoss(nn.Module):
 
         return self.mse_loss(masked_pred, masked_true)
 
+class Dyan_Autoencoder_reduce(nn.Module):
+    def __init__(self, Drr, Dtheta, dim, dataType, Inference, gpu_id, fistaLam, is_binary=False):
+        super(Dyan_Autoencoder_reduce, self).__init__()
+
+        self.Drr = Drr
+        self.Dtheta = Dtheta
+        self.Inference = Inference
+        self.gpu_id = gpu_id
+        self.dim = dim
+        self.dataType = dataType
+        self.fistaLam = fistaLam
+        self.is_binary = is_binary
+
+        print('***** Dyan Autoencoder Conv1D decoder *****')
+
+        if self.is_binary:
+            print('*** Binarization ***')
+            self.BinaryCoding = GumbelSigmoid()
+
+        self.transformer_encoder = TransformerEncoder(embed_dim=25*2, embed_proj_dim=50, is_input_proj=1, ff_dim=2048, num_heads=5, num_layers=2, dropout=0.1)
+        self.sparse_coding = DyanEncoder(self.Drr, self.Dtheta,  lam=fistaLam, gpu_id=self.gpu_id)
+        
+        self.conv1 = nn.Conv1d(36, 64, 3, stride=1, padding=1)
+        self.bn1 = nn.BatchNorm1d(num_features=64, eps=1e-05, affine=True)
+
+        self.conv2 = nn.Conv1d(64, 64, 3, stride=1, padding=1)
+        self.bn2 = nn.BatchNorm1d(num_features=64, eps=1e-5, affine=True)
+
+        self.conv3 = nn.Conv1d(64, 36, 3, stride=1, padding=1)
+        self.bn3 = nn.BatchNorm1d(num_features=36, eps=1e-5, affine=True)
+
+        self.relu = nn.LeakyReLU()
+
+    def key_padding_mask(self, lengths, max_len=None):
+        """
+        Used to mask padded positions: creates a (batch_size, max_len) boolean mask from a tensor of sequence lengths,
+        where 1 means keep element at this position (time step)
+        """
+        batch_size = lengths.numel()
+        max_len = max_len or lengths.max_val()  # trick works because of overloading of 'or' operator for non-boolean types
+        return (torch.arange(0, max_len, device=lengths.device)
+                .type_as(lengths)
+                .repeat(batch_size, 1)
+                .lt(lengths.unsqueeze(1)))
+
+    def forward(self, x, T, lengths):
+        
+        key_padding_mask = ~self.key_padding_mask(lengths, max_len=T).cuda()
+        src_mask = None
+
+        tenc_out = self.transformer_encoder(x, src_mask=src_mask, src_key_padding_mask=key_padding_mask)
+
+        sparse_code, Dict, _ = self.sparse_coding.forward2(tenc_out, T)
+
+        if self.is_binary:
+            binary_code = self.BinaryCoding(sparse_code ** 2, force_hard=True, temperature=0.1, inference=self.Inference)
+            sparse_code = sparse_code * binary_code
+        else:
+            binary_code = sparse_code
+
+        dyan_out = torch.matmul(Dict, sparse_code)
+        
+        tdec_out = self.relu(self.bn1(self.conv1(dyan_out)))
+        tdec_out = self.relu(self.bn2(self.conv2(tdec_out)))
+        tdec_out = self.relu(self.bn3(self.conv3(tdec_out)))
+        
+        return dyan_out, binary_code, tenc_out, tdec_out
+
 class Dyan_Autoencoder(nn.Module):
     def __init__(self, Drr, Dtheta, dim, dataType, Inference, gpu_id, fistaLam, is_binary=False):
         super(Dyan_Autoencoder, self).__init__()

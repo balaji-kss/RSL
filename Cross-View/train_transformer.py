@@ -151,9 +151,6 @@ for epoch in range(0, Epoch+1):
         # print('input_skeletons shape ', input_skeletons.shape) #(32, 36, 50)
         actPred, binary, recon, dyan_input = net(input_skeletons, t, lengths)
         bi_gt = torch.zeros_like(binary).cuda(gpu_id)
-
-        # actPred, recon = net(input_skeletons, t)
-        dyan_input = input_skeletons
         
         if clip == 'Single':
             actPred = actPred
