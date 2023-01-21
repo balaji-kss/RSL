@@ -3,8 +3,8 @@ import numpy as np
 import argparse
 import re
 
-log_path = '/home/balajisundar/Documents/US/NEU/Courses/Fall2022/Thesis/new_exps/exp10f/loss_pretrain.log'
-name = 'TENC + DYAN + BI'
+log_path = '/home/balajisundar/Documents/US/NEU/Courses/Fall2022/Thesis/new_exps/exp12/cls_loss.log'
+name = 'TENC + DYAN'
 
 rows = open(log_path).read().strip()
 
@@ -46,7 +46,7 @@ plt.plot(epochs, cls_loss, color ='r', label='cls loss')
 plt.plot(epochs, mse_loss, color ='g', label='mse loss') 
 plt.title('Total loss - ' + name) 
 #plt.ylim([0, 6])
-plt.xlim([0, 450])
+plt.xlim([0, 200])
 plt.legend()
 plt.show()
 plt.clf()
@@ -70,12 +70,12 @@ plt.show()
 plt.clf()
 
 plt.plot(epochs, train_acc, color='r', label='train acc')
-plt.plot(epochs[::10], test_acc, color='g', label='test acc')
+plt.plot(epochs[:-1:10], test_acc, color='g', label='test acc')
 
 #plt.plot(epochs, train_acc, color ='tab:blue') 
 plt.title('Train test acc - ' + name)
-plt.ylim([0, 1])
-plt.xlim([0, 450])
+plt.ylim([0, 1.2])
+plt.xlim([0, 200])
 plt.legend()
 plt.show()
 plt.clf()

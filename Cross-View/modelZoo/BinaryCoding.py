@@ -362,7 +362,8 @@ class Tenc_SparseC_Cl(nn.Module):
         else:
             Reconstruction = torch.matmul(Dict, sparseCode)
             label = self.Classifier(sparseCode)
-
+            binaryCode = sparseCode
+            
         return label, binaryCode, Reconstruction, tenc_out
 
 class Dyan_Tenc(nn.Module):

@@ -3,7 +3,7 @@ import numpy as np
 import argparse
 import re
 
-log_path = '/home/balajisundar/Documents/US/NEU/Courses/Fall2022/Thesis/new_exps/tenc_recon_n2_dim50.log'
+log_path = '/home/balajisundar/Documents/US/NEU/Courses/Fall2022/Thesis/new_exps/exp12/tenc_recon_conv_dec.log'
 name = 'TENC + DYAN + TDEC'
 
 rows = open(log_path).read().strip()
@@ -34,10 +34,11 @@ str_val_inp_recon_mse = r' \|val_inp_recon_mse: (\d+\.\d+)'
 val_inp_recon_mse = re.findall(str_val_inp_recon_mse, rows)
 val_inp_recon_mse = [float(ir) for ir in val_inp_recon_mse]
 
+print(len(dyan_mse), len(inp_recon_mse), len(val_dyan_mse), len(val_inp_recon_mse), val_dyan_mse)
 #plt.plot(epochs, total_loss, color ='b', label='train total loss')
-plt.plot(epochs, dyan_mse, color ='r', label='train dyan mse') 
+#plt.plot(epochs, dyan_mse, color ='r', label='train dyan mse') 
 plt.plot(epochs, inp_recon_mse, color ='g', label='train inp mse')
-plt.plot(epochs[::10], val_dyan_mse, color ='purple', label='val dyan mse') 
+#plt.plot(epochs[::10], val_dyan_mse, color ='purple', label='val dyan mse') 
 plt.plot(epochs[::10], val_inp_recon_mse, color ='magenta', label='val inp mse')
 
 plt.title('Train and test loss - ' + name) 

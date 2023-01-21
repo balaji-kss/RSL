@@ -132,7 +132,10 @@ def plot_recon():
     paths2 = ['recon_traj/dim25/skel.txt', 'recon_traj/dim25/dyan_inp.txt', 'recon_traj/dim25/recon.txt', 'recon_traj/dim25/tdec_out.txt']
     recon_data2 = get_recon_data(paths2, traj_index, traj_index//2, embed_traj=25)
 
-    paths3 = ['tenc_recon_bi_loss/skel.txt', 'tenc_recon_bi_loss/dyan_inp.txt', 'tenc_recon_bi_loss/recon.txt', 'tenc_recon_bi_loss/tdec_out.txt']
+    # paths3 = ['tenc_recon_bi_loss/skel.txt', 'tenc_recon_bi_loss/dyan_inp.txt', 'tenc_recon_bi_loss/recon.txt', 'tenc_recon_bi_loss/tdec_out.txt']
+    # recon_data3 = get_recon_data(paths3, traj_index, embed_traj=50)
+
+    paths3 = ['exp12/recon/skel.txt', 'exp12/recon/dyan_inp.txt', 'exp12/recon/recon.txt', 'exp12/recon/tdec_out.txt']
     recon_data3 = get_recon_data(paths3, traj_index, embed_traj=50)
 
     xs = list(range(1, 37))
@@ -141,14 +144,14 @@ def plot_recon():
         # draw_skeletons(inps[i])
         fig, axs = plt.subplots(2)
 
-        axs[1].set_title('dim50 recon')
-        plot(axs[2], 'blue', xs, recon_data0[0][i])
-        plot(axs[2], 'red', xs, recon_data0[1][i])
-        plot(axs[2], 'purple', xs, recon_data0[2][i])
-        plot(axs[2], 'green', xs, recon_data0[3][i])
-        axs[2].legend(['mse_x', 'mse_y', 'mse_y_', 'mse_x_'])
+        axs[1].set_title('dim50 recon transformer decoder')
+        plot(axs[1], 'blue', xs, recon_data0[0][i])
+        plot(axs[1], 'red', xs, recon_data0[1][i])
+        plot(axs[1], 'purple', xs, recon_data0[2][i])
+        plot(axs[1], 'green', xs, recon_data0[3][i])
+        axs[1].legend(['mse_x', 'mse_y', 'mse_y_', 'mse_x_'])
 
-        axs[0].set_title('dim50 recon bi')
+        axs[0].set_title('dim50 recon conv1d decoder')
         plot(axs[0], 'blue', xs, recon_data3[0][i])
         plot(axs[0], 'red', xs, recon_data3[1][i])
         plot(axs[0], 'purple', xs, recon_data3[2][i])
@@ -181,7 +184,8 @@ def plot_recon_sc():
     paths0 = ['recon_traj/dim50/skel.txt', 'recon_traj/dim50/dyan_inp.txt', 'recon_traj/dim50/recon.txt', 'recon_traj/dim50/tdec_out.txt']
     recon_data0 = get_recon_data(paths0, traj_index, embed_traj=50)
 
-    paths1 = ['tenc_recon_bi_loss/skel.txt', 'tenc_recon_bi_loss/dyan_inp.txt', 'tenc_recon_bi_loss/recon.txt', 'tenc_recon_bi_loss/tdec_out.txt']
+    # paths1 = ['tenc_recon_bi_loss/skel.txt', 'tenc_recon_bi_loss/dyan_inp.txt', 'tenc_recon_bi_loss/recon.txt', 'tenc_recon_bi_loss/tdec_out.txt']
+    paths1 = ['exp12/recon/skel.txt', 'exp12/recon/dyan_inp.txt', 'exp12/recon/recon.txt', 'exp12/recon/tdec_out.txt']
     recon_data1 = get_recon_data(paths1, traj_index, embed_traj=50)
     # paths1 = ['recon_traj/dim50/trskel.txt', 'recon_traj/dim50/trdyan_inp.txt', 'recon_traj/dim50/trrecon.txt', 'recon_traj/dim50/trtdec_out.txt']
     # recon_data1 = get_recon_data(paths1, traj_index, embed_traj=50)
@@ -190,7 +194,8 @@ def plot_recon_sc():
     recon_data2 = get_sc_data(paths2, traj_index, traj_index, embed_traj=50)
 
     #paths3 = ['exp9/trskel.txt', 'exp9/trdyan_inp.txt', 'exp9/trrecon.txt']
-    paths3 = ['exp11/skel.txt', 'exp11/dyan_inp.txt', 'exp11/recon.txt']
+    #paths3 = ['exp11/skel.txt', 'exp11/dyan_inp.txt', 'exp11/recon.txt']
+    paths3 = ['exp12/cls/skel.txt', 'exp12/cls/dyan_inp.txt', 'exp12/cls/recon.txt']
     recon_data3 = get_sc_data(paths3, traj_index, traj_index, embed_traj=50)
 
     xs = list(range(1, 37))
@@ -199,7 +204,7 @@ def plot_recon_sc():
         # draw_skeletons(inps[i])
         fig, axs = plt.subplots(2)
 
-        axs[0].set_title('dim50 w/o bi')
+        axs[0].set_title('dec - transformer')
         plot(axs[0], 'blue', xs, recon_data0[0][i])
         plot(axs[0], 'red', xs, recon_data0[1][i])
         plot(axs[0], 'purple', xs, recon_data0[2][i])
@@ -207,7 +212,7 @@ def plot_recon_sc():
         plot(axs[0], 'magenta', xs, recon_data2[2][i])
         axs[0].legend(['mse_x', 'recon_y', 'recon_y_', 'cls_y', 'cls_y_'])
 
-        axs[1].set_title('dim50 w bi')
+        axs[1].set_title('dec - conv1d')
         plot(axs[1], 'blue', xs, recon_data1[0][i])
         plot(axs[1], 'red', xs, recon_data1[1][i])
         plot(axs[1], 'purple', xs, recon_data1[2][i])

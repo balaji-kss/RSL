@@ -178,7 +178,6 @@ def test_reconstruct(dataloader, net, gpu_id, clip):
     dyan_loss_avg = global_dyan_loss/count
 
     input_loss_avg = np.round(input_loss_avg, 6)
-    dyan_loss_avg = np.round(dyan_loss_avg, 6)
     
     return dyan_loss_avg, input_loss_avg
 
@@ -297,10 +296,10 @@ if __name__ == "__main__":
     testloader = DataLoader(testSet, batch_size=32, shuffle=False, num_workers=num_workers)
 
     if recon:
-        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2_bi_1/290.pth'
+        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_conv_dec/160.pth'
     elif transformer:
         # model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_exp9_dim50/T36_fista01_openpose/300.pth'
-        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_sc_bi_exp11/T36_fista01_openpose/300.pth'
+        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_sc_exp12/T36_fista01_openpose/170.pth'
 
     else:
         model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/dyan_cl/T36_fista01_openpose/60.pth'
@@ -315,12 +314,12 @@ if __name__ == "__main__":
     if recon:
         Drr = stateDict['sparse_coding.rr'].float()
         Dtheta = stateDict['sparse_coding.theta'].float()
-        net = Dyan_Autoencoder(Drr=Drr, Dtheta=Dtheta, dim=2, dataType=dataType, \
-                    Inference=True, gpu_id=gpu_id, fistaLam=0.1, is_binary=True).cuda(gpu_id)
+        net = Dyan_Autoencoder_reduce(Drr=Drr, Dtheta=Dtheta, dim=2, dataType=dataType, \
+                    Inference=True, gpu_id=gpu_id, fistaLam=0.1, is_binary=False).cuda(gpu_id)
     elif transformer:
         Drr = stateDict['sparse_coding.rr'].float()
         Dtheta = stateDict['sparse_coding.theta'].float()
-        is_binary = True
+        is_binary = False
         print('Drr ', Drr)
         print('Dtheta ', Dtheta)
         print('is_binary ', is_binary)
@@ -336,6 +335,6 @@ if __name__ == "__main__":
 
     #Acc = testing(testloader, net, gpu_id, clip)
     Acc = visualize_cls(testloader, net, gpu_id, clip)
-    # print('Acc:%.4f' % Acc)
-    #visualize_reconstruct(testloader, net, gpu_id, clip)
+    print('Acc:%.4f' % Acc)
+    # visualize_reconstruct(testloader, net, gpu_id, clip)
     

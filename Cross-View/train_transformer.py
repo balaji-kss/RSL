@@ -16,11 +16,11 @@ lam1 = 2 # cls loss
 lam2 = 1 # mse loss
 fistaLam = 0.1
 N = 80 * 2
-Epoch = 300
+Epoch = 200
 # num_class = 10
 dataType = '2D'
 clip = 'Single'
-is_binary = True
+is_binary = False
 
 if clip == 'Single':
     num_workers = 8
@@ -34,7 +34,7 @@ setup = 'setup1' # v1,v2 train, v3 test;
 fusion = False
 'initialized params'
 
-model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_n2_bi_1/300.pth'
+model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_conv_dec/160.pth'
 
 #model_path = './pretrained/' + setup + '/' + clip + '/pretrainedDyan.pth'
 stateDict = torch.load(model_path, map_location=map_loc)['state_dict']
@@ -51,7 +51,7 @@ print('Drr ', Drr)
 print('Dtheta ', Dtheta)
 
 modelRoot = './ModelFile/crossView_NUCLA/'
-mode = '/tenc_sc_bi_exp11_1/'
+mode = '/tenc_sc_exp12_tf/'
 
 saveModel = modelRoot + clip + mode + 'T36_fista01_openpose/'
 if not os.path.exists(saveModel):
@@ -84,11 +84,11 @@ def load_pretrain_models(net, model_path):
     print('**** load pretrained tenc ****')
     net = load_pretrainedModel(tenc_state_dict, net)
 
-    # print('**** freeze transformer_encoder params ****')
-    # freeze_params(net.transformer_encoder)
+    print('**** freeze transformer_encoder params ****')
+    freeze_params(net.transformer_encoder)
 
     # print('**** freeze dyan params ****')
-    # freeze_params(net.sparseCoding)
+    # freeze_params(net.sparse_coding)
 
     return net
 
@@ -106,7 +106,7 @@ optimizer = torch.optim.SGD([
                                 {'params':filter(lambda x: x.requires_grad, net.Classifier.parameters()), 'lr':lr3}
                                 ], weight_decay=0.001, momentum=0.9)
 
-scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[100, 200], gamma=0.4)
+scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=[100], gamma=0.4)
 Criterion = torch.nn.CrossEntropyLoss()
 mseLoss = torch.nn.MSELoss()
 L1loss = torch.nn.SmoothL1Loss()
@@ -162,7 +162,12 @@ for epoch in range(0, Epoch+1):
 
         cls_loss = Criterion(actPred, gt_label)
         mse_loss = mseLoss(recon, dyan_input)
-        l1loss = L1loss(binary, bi_gt)
+
+        if is_binary:
+            l1loss = L1loss(binary, bi_gt)
+        else:
+            l1loss = L1loss(bi_gt, bi_gt) # basically zero
+
         loss = lam1 * cls_loss + lam2 * mse_loss + Alpha * l1loss
         loss.backward()
         optimizer.step()
