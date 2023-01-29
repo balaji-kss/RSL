@@ -23,7 +23,7 @@ gumbel_thresh = 0.505
 def load_data():
 
     path_list = './data/CV/' + setup + '/'
-    train_set = NUCLA_CrossView(root_list=path_list, dataType=dataType, clip=sampling, phase='train', cam='2,1', T=T, maskType=maskType,
+    train_set = NUCLA_CrossView(root_list=path_list, dataType=dataType, sampling=sampling, phase='train', cam='2,1', T=T, maskType=maskType,
                                 setup=setup)
 
     train_loader = DataLoader(train_set, batch_size=1, shuffle=False, num_workers=1)
@@ -104,18 +104,21 @@ def display_res(inp_img, inp_skel):
     # draw heatmap of joints
     img = np.zeros((480, 640, 3), dtype='uint8')
     img, colors = draw_bar(img, num_joints=25)
-    for skeleton, color in zip(inp_skel, colors):
+    imp_img = np.zeros((480, 640, 3), dtype='uint8')
+    num_imp_joints = 8
+
+    for i, (skeleton, color) in enumerate(zip(inp_skel, colors)):
         
         skeleton = (int(skeleton[0]), int(skeleton[1]))
         cv2.circle(img, center=skeleton, radius=4, color=color, thickness=-1)
-        # cv2.circle(inp_img, center=skeleton, radius=4, color=(0,0,255), thickness=-1)
+
+        if i < num_imp_joints:
+            cv2.circle(imp_img, center=skeleton, radius=4, color=(255,255,255), thickness=-1)
 
     inp_img = inp_img.astype('uint8')
     overlay = cv2.addWeighted(inp_img, 0.3, img, 0.7, 0)
-    mosaic = np.hstack((inp_img, img))    
-    mosaic = np.hstack((mosaic, overlay))
 
-    return mosaic
+    return overlay, imp_img
 
 def gcam_dyn(model_path):
 
@@ -145,7 +148,6 @@ def gcam_dyn(model_path):
         unnorm_skeletons = unnorm_skeletons.reshape(skeletons.shape[0]*skeletons.shape[1], t, -1)
         input_images = images.reshape(images.shape[0]*images.shape[1], t, 3, 480, 640)
         
-
         # print('input skeleton shape ', input_skeletons.shape) # (4, 2, 36, 50)
 
         N, T, C = input_skeletons.shape
@@ -158,11 +160,15 @@ def gcam_dyn(model_path):
             img_seq = input_images[j]
 
             input_.requires_grad_()
-            actPred, lastFeat, binaryCode, output_skeletons = net(input_, bi_thresh=gumbel_thresh)        
+            actPred, _, _, _ = net(input_, bi_thresh=gumbel_thresh)        
             print('gt: ', gt_label)
             print('actPred idx: ', actPred.argmax())
             grad = dyn_cam(input_, actPred).squeeze()
-            
+
+            if fixed:
+                grad = torch.sum(grad, axis=0)
+                grad = grad.repeat(36, 1)
+
             for ts in range(t):     
                 frame = img_seq[ts].cpu().numpy().transpose((1, 2, 0)).copy()
                 
@@ -175,12 +181,23 @@ def gcam_dyn(model_path):
                 
                 #frame = np.clip(frame * 255.0, 0, 255.0)
                 frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR).astype('uint8')
-                mosaic = display_res(frame, unnorm_skeleton_frame)
-                cv2.imshow('mosaic ', mosaic)
-                cv2.waitKey(-1)
-                
+                overlay, key_img = display_res(frame, unnorm_skeleton_frame)
+
+                img_dir = save_dir + str(i) + '/' + str(j) + '/'
+                img_path = os.path.join(img_dir, str(ts) + '.jpg')
+                if not os.path.exists(img_dir):
+                    os.makedirs(img_dir)
+
+                res_img = np.hstack((overlay, key_img))
+                cv2.imwrite(img_path, res_img)
+                cv2.imshow('overlay ', overlay)
+                cv2.imshow('key_img ', key_img)
+                cv2.waitKey(1)
 
 if __name__ == '__main__':
+
+    fixed = 1
     gpu_id = 2
-    model_path = '/home/balaji/RSL/Cross-View/cam_models/DIR/100.pth'
+    save_dir = '/home/balaji/Documents/code/RSL/Thesis/cam_dyn/results/'
+    model_path = '/home/balaji/Documents/code/RSL/Thesis/cam_dyn/100.pth'
     gcam_dyn(model_path)
