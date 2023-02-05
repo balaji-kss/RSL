@@ -409,6 +409,50 @@ class Dyan_Tenc(nn.Module):
 
         return label, Reconstruction
 
+class Dyan_Tenc_multi(nn.Module):
+    def __init__(self, num_class, Npole, Drr, Dtheta, dataType, Inference, dim,fistaLam, gpu_id):
+        super(Dyan_Tenc_multi, self).__init__()
+        self.num_class = num_class
+        self.Npole = Npole
+        self.Drr = Drr
+        self.Dtheta = Dtheta
+        self.gpu_id = gpu_id
+        self.dim = dim
+        self.dataType = dataType
+        self.fistaLam = fistaLam
+        self.Inference = Inference
+        
+        self.sparseCoding = DyanEncoder(self.Drr, self.Dtheta, lam=self.fistaLam, gpu_id=self.gpu_id)
+        self.BinaryCoding = GumbelSigmoid()
+        self.transformer_encoder = TransformerEncoder(embed_dim=161*50, embed_proj_dim=161*25, ff_dim=2048, num_heads=7, num_layers=4, dropout=0.1, seq_len=6, is_input_proj=True, is_output_proj=True)
+        self.Classifier = classificationGlobal(num_class=self.num_class, Npole=Npole, dataType=self.dataType)
+
+    def forward(self, x, T):
+        
+        # sparseCode, Dict, R = self.sparseCoding.forward2(x, T) # w.o. RH
+        sparseCode, Dict, Reconstruction  = self.sparseCoding(x, T) # w.RH
+
+        'for GUMBEL'
+        binaryCode = self.BinaryCoding(sparseCode**2, force_hard=True, temperature=0.1, inference=self.Inference)
+        temp1 = sparseCode * binaryCode
+        
+        Reconstruction = torch.matmul(Dict, temp1)
+
+        B, N, T = binaryCode.shape # (6 * B, 161 * 50)
+        nclips = 6
+        
+        binaryCode = binaryCode.reshape(B, N * T) # (6 * B, 161 * 50)        
+        binaryCode = binaryCode.reshape(B//nclips, nclips, N * T) # (B, 6, 161 * 50)
+        
+        tenc_out = self.transformer_encoder(binaryCode, src_mask=None, src_key_padding_mask=None) # (B, 6, 161 * 50)
+
+        tenc_out = tenc_out.reshape(B//nclips, nclips, N, T)
+        tenc_out = tenc_out.reshape(B, N, T)
+
+        label = self.Classifier(tenc_out)
+
+        return label, binaryCode, Reconstruction
+
 class Tenc_Cl(nn.Module):
     def __init__(self, num_class, gpu_id):
         super(Tenc_Cl, self).__init__()

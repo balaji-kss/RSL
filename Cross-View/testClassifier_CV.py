@@ -165,10 +165,7 @@ def testing(dataloader, net, gpu_id, clip):
 
             skeleton = sample['input_skeletons']['normSkeleton'].float().cuda(gpu_id)
             y = sample['action'].cuda(gpu_id)
-            lengths = sample['lengths'].cuda(gpu_id)
-            images = sample['input_images']
-            
-            images = images.reshape(36, 3, 224, 224).cpu().detach().numpy()
+            # lengths = sample['lengths'].cuda(gpu_id)
 
             if clip == 'Single':
                 t = skeleton.shape[1]
@@ -201,8 +198,6 @@ def testing(dataloader, net, gpu_id, clip):
             correct = torch.eq(y, pred).int()
             count += y.shape[0]
             pred_cnt += torch.sum(correct).data.item()
-            print(y, pred)
-            print(pred_cnt, count)
 
             recon_loss_avg = global_recon_loss/count
             #print('recon_loss: ', np.round(recon_loss, 5), ' recon_loss_avg: ', np.round(recon_loss_avg, 5))

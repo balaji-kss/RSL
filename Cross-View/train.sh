@@ -7,4 +7,4 @@ LOGFILE=loggers/${1}.log
 #CUDA_VISIBLE_DEVICES=1 python3 train_tenc_recon.py > "$LOGFILE" 2>&1 &
 
 
-CUDA_VISIBLE_DEVICES=1 python3 train_transformer_multi.py > "$LOGFILE" 2>&1 &
+CUDA_VISIBLE_DEVICES=2 python3 trainclassifier_multi.py > "$LOGFILE" 2>&1 &

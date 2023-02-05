@@ -26,7 +26,7 @@ if clip == 'Single':
     bz = 32
 else:
     num_workers = 4
-    bz = 12
+    bz = 6
 
 T = 36 # input clip length
 
@@ -39,7 +39,7 @@ Dtheta = np.angle(P)
 Dtheta = torch.from_numpy(Dtheta).float()
 
 modelRoot = './ModelFile/crossView_NUCLA/'
-mode = '/dyan_bi_cl_rhdyan/'
+mode = '/dyan_bi_tenc_cl_rhdyan/'
 
 saveModel = modelRoot + clip + mode + 'T36_fista01_openpose/'
 if not os.path.exists(saveModel):
@@ -60,17 +60,19 @@ testloader = DataLoader(testSet, batch_size=bz, shuffle=True, num_workers=num_wo
 
 'dy+bi+cl'
 dy_pretrain = './pretrained/' + setup + '/' + clip + '/pretrainedRHdyan_BI.pth'
-net = Fullclassification(num_class=10, Npole=N+1, num_binary=N+1, Drr=Drr, Dtheta=Dtheta, dim=2, dataType=dataType, Inference=True, gpu_id=gpu_id, fistaLam=0.1).cuda(gpu_id)
+# net = Fullclassification(num_class=10, Npole=N+1, num_binary=N+1, Drr=Drr, Dtheta=Dtheta, dim=2, dataType=dataType, Inference=True, gpu_id=gpu_id, fistaLam=0.1).cuda(gpu_id)
+net = Dyan_Tenc_multi(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=0.1, Inference=True, gpu_id=gpu_id).cuda(gpu_id)
 
 stateDict = torch.load(dy_pretrain, map_location=map_loc)
 net = load_pretrainedModel(stateDict, net)
 
 net.train()
-lr = 1e-3  # classifier
+lr = 5e-4  # classifier
 lr_2 = 1e-4  # sparse codeing
 
 'for dy+bi+cl'
 optimizer = torch.optim.SGD([{'params':filter(lambda x: x.requires_grad, net.sparseCoding.parameters()), 'lr':lr_2},
+{'params':filter(lambda x: x.requires_grad, net.transformer_encoder.parameters()), 'lr':lr},
                              {'params':filter(lambda x: x.requires_grad, net.Classifier.parameters()), 'lr':lr}], weight_decay=0.001, momentum=0.9)
 
 
@@ -127,15 +129,16 @@ for epoch in range(0, Epoch+1):
 
         cls_loss = Criterion(actPred, gt_label)
         mse_loss = mseLoss(output_skeletons, input_skeletons)
+        bi_loss = L1loss(binaryCode, bi_gt)
 
         loss = lam1 * cls_loss + lam2 * mse_loss \
-               + Alpha * L1loss(binaryCode, bi_gt)
+               + Alpha * bi_loss
         loss.backward()
         optimizer.step()
         lossVal.append(loss.data.item())
         lossCls.append(cls_loss.data.item())
         lossMSE.append(mse_loss.data.item())
-        lossBi.append(L1loss(binaryCode, bi_gt).data.item())
+        lossBi.append(bi_loss.data.item())
 
         ## Train acc
         correct = torch.eq(gt_label, pred).int()

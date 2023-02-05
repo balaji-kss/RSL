@@ -26,7 +26,7 @@ if clip == 'Single':
     bz = 32
 else:
     num_workers = 4
-    bz = 8
+    bz = 12
 
 T = 36 # input clip length
 
