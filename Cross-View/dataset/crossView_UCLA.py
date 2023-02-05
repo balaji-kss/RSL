@@ -78,29 +78,59 @@ def DrawGaussian(img, pt, sigma):
    Ankle_Right = 19;
    Foot_Right = 20;
 """
-def getJsonData(fileRoot, folder):
+def getJsonData(fileRoot, folder, jsonList):
     skeleton = []
-    allFiles = os.listdir(os.path.join(fileRoot, folder))
-    allFiles.sort()
+    # allFiles = os.listdir(os.path.join(fileRoot, folder))
+    # allFiles.sort()
     usedID = []
-    for i in range(0, len(allFiles)):
-        with open(os.path.join(fileRoot,folder, allFiles[i])) as f:
+    confidence = []
+    mid_point_id1 = [2,3,5,6,8,9,10,12,13]
+    mid_point_id2 = [3,4,6,7,1,10,11,13,14]
+    for i in range(0, len(jsonList)):
+        # json_file = imagesList[i].split('.jpg')[0] + '_keypoints.json'
+        with open(os.path.join(fileRoot, folder, jsonList[i])) as f:
             data = json.load(f)
         # print(len(data['people']))
         if len(data['people']) != 0:
             # print('check')
             usedID.append(i)
-            temp = data['people'][0]['pose_keypoints_2d']
-            pose = np.expand_dims(np.asarray(temp).reshape(25, 3)[:,0:2], 0)
+            temp = np.asarray(data['people'][0]['pose_keypoints_2d']).reshape(25,3)
+            pose = np.expand_dims(temp[:,0:2], 0)
+            # midPoint = (pose[:,mid_point_id1]+pose[:,mid_point_id2])/2
+            # pose = np.concatenate((pose,midPoint),1)
+            s = np.array([temp[:,-1], temp[:,-1]])
+            score = np.expand_dims(s.transpose(1,0), 0)
             skeleton.append(pose)
+            confidence.append(score)
+
         else:
             continue
 
     skeleton = np.concatenate((skeleton))
-    return skeleton, usedID
+    confidence = np.concatenate((confidence))
+    return skeleton, usedID, confidence
 
     # return torch.tensor(skeleton).type(torch.FloatTensor)
 
+def alignDataList(fileRoot, folder, imagesList,dataset):
+    'this funciton is to make sure image list and skeleton list are aligned'
+    allFiles = os.listdir(os.path.join(fileRoot, folder)) # get json files
+    allFiles.sort()
+    newJson_list = []
+    newImage_list = []
+
+    for i in range(0, len(imagesList)):
+        if dataset == 'N-UCLA':
+            json_file = imagesList[i].split('.jpg')[0] + '_keypoints.json'
+        else:
+            image_num = imagesList[i].split('.jpg')[0].split('_')[1]
+            json_file = folder + '_rgb_0000000' + str(image_num)+'_keypoints.json'
+        if json_file in allFiles:
+            newJson_list.append(json_file)
+            newImage_list.append(imagesList[i])
+
+    return newJson_list, newImage_list
+    
 class NUCLA_CrossView(Dataset):
     """Northeastern-UCLA Dataset Skeleton Dataset, cross view experiment,
         Access input skeleton sequence, GT label
@@ -156,6 +186,13 @@ class NUCLA_CrossView(Dataset):
             for name_sample in list_samples:
                 self.samples_list.append((view, name_sample))
         
+        self.transform = transforms.Compose([
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
+
         print('before train len ', len(self.samples_list))
         random.seed(10)
         random.shuffle(self.samples_list)
@@ -193,6 +230,7 @@ class NUCLA_CrossView(Dataset):
             dim = 3
         normSkeleton = np.zeros_like(skeleton)
         visibility = np.zeros(skeleton.shape)
+        bbox = np.zeros((skeleton.shape[0], 4))
         for i in range(0, skeleton.shape[0]):
             nonZeros = []
             ids = []
@@ -215,8 +253,9 @@ class NUCLA_CrossView(Dataset):
                 normPose[ids,2] = (nonzeros[:,1] - minZ)/(maxZ-minZ)
             normSkeleton[i] = normPose
             visibility[i,ids] = 1
+            bbox[i] = np.asarray([minX, minY, maxX, maxY])
 
-        return normSkeleton, visibility
+        return normSkeleton, visibility, bbox
 
     def pose_to_heatmap(self, poses, image_size, outRes):
         ''' Pose to Heatmap
@@ -327,6 +366,54 @@ class NUCLA_CrossView(Dataset):
 
         return skeleton_New, normSkeleton_New, imageSequence_New
 
+    def get_rgbList(self, view, name_sample):
+        data_path = os.path.join(self.data_root, view, name_sample)
+        # print(data_path)
+        # fileList = np.loadtxt(os.path.join(data_path, 'fileList.txt'))
+        imgId = []
+        imageList = []
+
+        for item in os.listdir(data_path):
+            if item.find('_rgb.jpg') != -1:
+                id = int(item.split('_')[1])
+                imgId.append(id)
+
+        imgId.sort()
+
+        for i in range(0, len(imgId)):
+            for item in os.listdir(data_path):
+                if item.find('_rgb.jpg') != -1:
+                    if int(item.split('_')[1]) == imgId[i]:
+                        imageList.append(item)
+        # imageList.sort()
+
+        'make sure it is sorted'
+        return imageList, data_path
+
+    def get_rgb_data(self, data_path, imageList):
+        imgSize = []
+        imgSequence = []
+        imgSequenceOrig = []
+
+        for i in range(0, len(imageList)):
+            img_path = os.path.join(data_path, imageList[i])
+            # orig_image = cv2.imread(img_path)
+            # imgSequenceOrig.append(np.expand_dims(orig_image,0))
+
+            input_image = Image.open(img_path)
+            imgSize.append(input_image.size)
+            imgSequenceOrig.append(np.expand_dims(input_image, 0))
+
+
+            img_tensor = self.transform(input_image)
+
+            imgSequence.append(img_tensor.unsqueeze(0))
+
+        imgSequence = torch.cat((imgSequence), 0)
+        imgSequenceOrig = np.concatenate((imgSequenceOrig), 0)
+
+        return imgSequence, imgSize, imgSequenceOrig
+
     def get_data(self, view, name_sample):
 
         imageSequence, _, imageSequence_orig = self.get_rgb(view, name_sample)
@@ -381,58 +468,102 @@ class NUCLA_CrossView(Dataset):
         return heatmap_to_use, imageSequence_input, skeletonData, length
 
     def get_data_multiSeq(self, view, name_sample):
-        overlap_rate = 0.7
-        imageSequence, _, imageSequence_orig = self.get_rgb(view, name_sample)
-        if self.dataType == '2D':
-            skeleton, usedID = getJsonData(os.path.join(self.root_skeleton, view), name_sample)
+        imagesList, data_path = self.get_rgbList(view, name_sample)
+        jsonList, imgList = alignDataList(os.path.join(self.root_skeleton, view), name_sample, imagesList,'N-UCLA')
 
+        assert len(imgList) == len(jsonList)
+        imageSequence, _, imageSequence_orig = self.get_rgb_data(data_path, imgList)
+
+        if self.dataType == '2D':
+            skeleton, usedID, confidence = getJsonData(os.path.join(self.root_skeleton, view), name_sample, jsonList)
             imageSequence = imageSequence[usedID]
+            imageSequence_orig = imageSequence_orig[usedID]
         else:
             skeleton = np.load(os.path.join(self.root_skeleton, view, name_sample + '.npy'), allow_pickle=True)
+            confidence = np.ones_like(skeleton)
 
-        normSkeleton, _ = self.get_uniNorm(skeleton)
+        normSkeleton, binaryMask, bboxes = self.get_uniNorm(skeleton)
+
         T_sample, num_joints, dim = normSkeleton.shape
+        stride = T_sample / self.clips
+        ids_sample = []
 
-
-        inpSkeleton_all = []
-        imageSequence_input = []
-        heatmap_to_use = []
-        skeleton_all = []
-
+        for i in range(self.clips):
+            id_sample = random.randint(int(stride * i), int(stride * (i + 1)) - 1)
+            ids_sample.append(id_sample)
         if T_sample <= self.T:
 
-            skeleton_input, normSkeleton_input, imageSequence_inp = self.paddingSeq(skeleton, normSkeleton, imageSequence)
+            skeleton_input, normSkeleton_input, imageSequence_inp = self.paddingSeq(skeleton, normSkeleton,
+                                                                                    imageSequence)
+            temp = np.expand_dims(normSkeleton_input, 0)
+            inpSkeleton_all = np.repeat(temp, self.clips, 0)
 
-            inpSkeleton_all.append(normSkeleton_input)
-            skeleton_all.append(skeleton_input)
-            imageSequence_input.append(imageSequence_inp)
-            heatmap_to_use.append(self.pose_to_heatmap(skeleton_input, (640, 480), 64))
+            tempImg = np.expand_dims(imageSequence_inp, 0)
+            imageSequence_input = np.repeat(tempImg, self.clips, 0)
+
+            temp_skl = np.expand_dims(skeleton_input, 0)
+            skeleton_all = np.repeat(temp_skl, self.clips, 0)
+
+            heatmaps = self.pose_to_heatmap(skeleton_input, (640, 480), 64)
+            tempHeat = np.expand_dims(heatmaps, 0)
+            heatmap_to_use = np.repeat(tempHeat, self.clips, 0)
+
+        else: # T_sample > self.T
+
+            inpSkeleton_all = []
+            imageSequence_input = []
+            visibility_input = []
+            heatmap_to_use = []
+            skeleton_all = []
+            ROIs_input = []
+            affineSkeletons_input = []
+
+            heatmaps = self.pose_to_heatmap(skeleton, (640, 480), 64)
+            for id in ids_sample:
+
+                if (id - int(self.T / 2)) <= 0 < (id + int(self.T / 2)) < T_sample:
+
+                    temp = np.expand_dims(normSkeleton[0:self.T], 0)
+                    tempImg = np.expand_dims(imageSequence[0:self.T], 0)
+                    temp_skl = np.expand_dims(skeleton[0:self.T], 0)
+                    tempHeat = np.expand_dims(heatmaps[0:self.T], 0)
+
+                elif 0 < (id-int(self.T/2)) <= (id + int(self.T / 2)) < T_sample:
+                    temp = np.expand_dims(normSkeleton[id - int(self.T / 2):id + int(self.T / 2)], 0)
+                    tempImg = np.expand_dims(imageSequence[id - int(self.T / 2):id + int(self.T / 2)], 0)
+                    temp_skl = np.expand_dims(skeleton[id - int(self.T / 2):id + int(self.T / 2)], 0)
+                    tempHeat = np.expand_dims(heatmaps[id - int(self.T / 2):id + int(self.T / 2)], 0)
+
+                elif (id - int(self.T/2)) < T_sample <= (id+int(self.T / 2)):
+
+                    temp = np.expand_dims(normSkeleton[T_sample - self.T:], 0)
+                    tempImg = np.expand_dims(imageSequence[T_sample - self.T:], 0)
+                    temp_skl = np.expand_dims(skeleton[T_sample - self.T:], 0)
+                    tempHeat = np.expand_dims(heatmaps[T_sample - self.T:], 0)
 
 
-        # stride = int(T_sample/self.T)
-        stride = 1
-        start_frame = 0
-        last_frame = self.T
-        overlap = int(self.T * (1-overlap_rate))
-        while last_frame <= T_sample:
-            start_frame = int(start_frame + overlap)
-            last_frame = int(last_frame + overlap)
-            selectNorm = normSkeleton[start_frame:last_frame][0::stride]
-            selectSkel = skeleton[start_frame:last_frame][0::stride]
+                else:
+                    temp = np.expand_dims(normSkeleton[T_sample - self.T:], 0)
+                    tempImg = np.expand_dims(imageSequence[T_sample - self.T:], 0)
+                    temp_skl = np.expand_dims(skeleton[T_sample - self.T:], 0)
+                    tempHeat = np.expand_dims(heatmaps[T_sample - self.T:], 0)
 
-            selectImage = imageSequence[start_frame:last_frame][0::stride]
+                inpSkeleton_all.append(temp)
+                skeleton_all.append(temp_skl)
+                imageSequence_input.append(tempImg)
+                heatmap_to_use.append(tempHeat)
 
-            if selectNorm.shape[0] != self.T:
-                selectSkel, selectNorm, selectImage = self.paddingSeq(selectSkel, selectNorm, selectImage)
+            inpSkeleton_all = np.concatenate((inpSkeleton_all), 0)
+            imageSequence_input = np.concatenate((imageSequence_input), 0)
+            skeleton_all = np.concatenate((skeleton_all), 0)
+            heatmap_to_use = np.concatenate((heatmap_to_use), 0)
+            # ROIs_input = np.concatenate((ROIs_input), 0)
+            # visibility_input = np.concatenate((visibility_input), 0)
+            # affineSkeletons_input = np.concatenate((affineSkeletons_input),0)
 
-
-            inpSkeleton_all.append(selectNorm)
-            skeleton_all.append(selectSkel)
-            heatmap_to_use.append(self.pose_to_heatmap(selectSkel, (640, 480), 64))
-            imageSequence_input.append(selectImage)
 
         skeletonData = {'normSkeleton':inpSkeleton_all, 'unNormSkeleton': skeleton_all}
-        # print('seq len:',T_sample, 'clips:', len(inpSkeleton_all))
+
         return heatmap_to_use, imageSequence_input, skeletonData
 
     def __getitem__(self, index):
@@ -457,7 +588,7 @@ class NUCLA_CrossView(Dataset):
 
         label_action = self.action_list[name_sample[:3]]
         dicts = {'heat': heat_maps, 'input_images': images, 'input_skeletons': skeletons,
-                 'action': label_action, 'sample_name':name_sample, 'lengths':lengths}
+                 'action': label_action, 'sample_name':name_sample} # 'lengths':lengths}
 
         return dicts
 

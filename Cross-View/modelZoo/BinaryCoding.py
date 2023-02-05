@@ -673,8 +673,9 @@ class Fullclassification(nn.Module):
         self.Classifier = classificationGlobal(num_class=self.num_class, Npole=Npole, dataType=self.dataType)
         self.sparseCoding = DyanEncoder(self.Drr, self.Dtheta,  lam=fistaLam, gpu_id=self.gpu_id)
     def forward(self, x, T):
-        sparseCode, Dict, R = self.sparseCoding.forward2(x, T) # w.o. RH
-        # sparseCode, Dict, Reconstruction  = self.sparseCoding(x, T) # w.RH
+        
+        # sparseCode, Dict, R = self.sparseCoding.forward2(x, T) # w.o. RH
+        sparseCode, Dict, Reconstruction  = self.sparseCoding(x, T) # w.RH
 
         'for GUMBEL'
         binaryCode = self.BinaryCoding(sparseCode**2, force_hard=True, temperature=0.1, inference=self.Inference)

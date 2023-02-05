@@ -3,10 +3,89 @@ from dataset.crossView_UCLA import *
 from torch.optim import lr_scheduler
 from modelZoo.BinaryCoding import *
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 mseLoss = torch.nn.MSELoss()
 
-def testing(dataloader, net, gpu_id, clip):
+def get_attention_weights(transformer, save_output):
+
+    for module in transformer.modules():
+        if isinstance(module, nn.MultiheadAttention):
+            module = patch_attention(module)
+            module.register_forward_hook(save_output)
+
+    return save_output
+    
+def patch_attention(m):
+    forward_orig = m.forward
+
+    def wrap(*args, **kwargs):
+        kwargs['need_weights'] = True
+        # kwargs['average_attn_weights'] = True
+
+        return forward_orig(*args, **kwargs)
+
+    m.forward = wrap
+
+    return m
+        
+class SaveOutput:
+    def __init__(self):
+        self.outputs = []
+
+    def __call__(self, module, module_in, module_out):
+        self.outputs.append(module_out[1])
+
+    def clear(self):
+        self.outputs = []
+
+def vis_output0(outputs):
+
+    stack_img = []
+    print('output len ', len(outputs))
+    for output in outputs:
+
+        output = output[0].cpu().detach().numpy()
+        print('output shape ', output.shape)
+        mino, maxo = np.min(output), np.max(output)
+        norm_out = (output - mino) * 255 / (maxo - mino)
+        hmap = np.clip(norm_out, 0, 255).astype('uint8')
+        stack_img.append(hmap)
+
+    stacki = np.hstack((stack_img[0], stack_img[1]))
+    stacki = cv2.resize(stacki, None, fx=2, fy=2)
+    cv2.imshow('attention for each encoder layer', stacki)
+    # cv2.waitKey(-1)
+
+def vis_output(outputs):
+
+    stack_img = []
+    print('output len ', len(outputs))
+    for output in outputs:
+
+        output = output[0].cpu().detach().numpy()
+        mino, maxo = np.min(output), np.max(output)
+        norm_out = (output - mino) / (maxo - mino)
+        hmap = np.clip(norm_out, 0, 1)
+        stack_img.append(hmap)
+
+    fig, (ax1, ax2) = plt.subplots(1,2)
+    sns.heatmap(stack_img[0], linewidth=0.5, ax=ax1)
+    sns.heatmap(stack_img[1], linewidth=0.5, ax=ax2)
+    plt.show()
+
+def vis_imgs(images):
+
+    for i in range(36):
+        image = images[i].transpose((1, 2, 0))
+        mino, maxo = np.min(image), np.max(image)
+        image = (image - mino) * 255 / (maxo - mino)
+        image = np.clip(image, 0, 255).astype('uint8')
+        cv2.imshow('image ', image)
+        cv2.waitKey(-1)
+
+def test_vis_att(dataloader, net, gpu_id, clip):
+
     count = 0
     pred_cnt = 0
     global_recon_loss = 0
@@ -19,6 +98,9 @@ def testing(dataloader, net, gpu_id, clip):
             skeleton = sample['input_skeletons']['normSkeleton'].float().cuda(gpu_id)
             y = sample['action'].cuda(gpu_id)
             lengths = sample['lengths'].cuda(gpu_id)
+            images = sample['input_images']
+            
+            images = images.reshape(36, 3, 224, 224).cpu().detach().numpy()
 
             if clip == 'Single':
                 t = skeleton.shape[1]
@@ -29,10 +111,19 @@ def testing(dataloader, net, gpu_id, clip):
                 input = skeleton.reshape(skeleton.shape[0]*skeleton.shape[1], t, -1)
 		
 
-            # label, recon = net(input, t) # 'DY + CL'
-            # dyan_inp = input
+            save_output = SaveOutput()
 
-            label, bi, recon, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL'
+            ## get attention
+            save_output = get_attention_weights(net.transformer_encoder, save_output)
+
+            label, recon = net(input, t) # 'DY + CL'
+            dyan_inp = input
+
+            vis_imgs(images)
+            vis_output(save_output.outputs)
+            
+
+            # label, bi, recon, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL'
             recon_loss = mseLoss(recon, dyan_inp).data.item()
             global_recon_loss += recon_loss
 
@@ -50,6 +141,68 @@ def testing(dataloader, net, gpu_id, clip):
             correct = torch.eq(y, pred).int()
             count += y.shape[0]
             pred_cnt += torch.sum(correct).data.item()
+            print(y, pred)
+            print(pred_cnt, count)
+
+            recon_loss_avg = global_recon_loss/count
+            #print('recon_loss: ', np.round(recon_loss, 5), ' recon_loss_avg: ', np.round(recon_loss_avg, 5))
+
+        Acc = pred_cnt/count
+        recon_loss_avg = global_recon_loss/count
+        print(' recon_loss_avg: ', np.round(recon_loss_avg, 5))
+        
+    return Acc
+
+def testing(dataloader, net, gpu_id, clip):
+    count = 0
+    pred_cnt = 0
+    global_recon_loss = 0
+    T = 36
+
+    net.eval()
+    with torch.no_grad():
+        for i, sample in enumerate(dataloader):
+
+            skeleton = sample['input_skeletons']['normSkeleton'].float().cuda(gpu_id)
+            y = sample['action'].cuda(gpu_id)
+            lengths = sample['lengths'].cuda(gpu_id)
+            images = sample['input_images']
+            
+            images = images.reshape(36, 3, 224, 224).cpu().detach().numpy()
+
+            if clip == 'Single':
+                t = skeleton.shape[1]
+                input = skeleton.reshape(skeleton.shape[0], t, -1)
+
+            else:
+                t = skeleton.shape[2]
+                input = skeleton.reshape(skeleton.shape[0]*skeleton.shape[1], t, -1)
+		
+            label, _, recon = net(input, t) # 'DY + BI + CL'
+
+            #label, recon = net(input, t) # 'DY + CL'
+            dyan_inp = input
+
+            # label, bi, recon, dyan_inp = net(input, t, lengths) # 'Tenc + DY + CL'
+            recon_loss = mseLoss(recon, dyan_inp).data.item()
+            global_recon_loss += recon_loss
+
+            if clip == 'Single':
+                label = label
+                pred = torch.argmax(label, 1)
+
+            else:
+                num_class = label.shape[-1]
+                label = label.reshape(skeleton.shape[0], skeleton.shape[1], num_class)
+
+                label = torch.mean(label,1)
+                pred = torch.argmax(label,1)
+
+            correct = torch.eq(y, pred).int()
+            count += y.shape[0]
+            pred_cnt += torch.sum(correct).data.item()
+            print(y, pred)
+            print(pred_cnt, count)
 
             recon_loss_avg = global_recon_loss/count
             #print('recon_loss: ', np.round(recon_loss, 5), ' recon_loss_avg: ', np.round(recon_loss_avg, 5))
@@ -279,7 +432,7 @@ def getPlots(LOSS,LOSS_CLS, LOSS_MSE, LOSS_BI, ACC, fig_name):
 if __name__ == "__main__":
 
     gpu_id = 0
-    num_workers = 4
+    num_workers = 1
     N = 80*2
     T = 36
     num_class = 10
@@ -292,14 +445,15 @@ if __name__ == "__main__":
     dataType = '2D'
     map_loc = "cuda:" + str(gpu_id)
 
-    testSet = NUCLA_CrossView(root_list=path_list, dataType=dataType, clip=clip, phase='test', cam='2,1', T=T, setup=setup)
-    testloader = DataLoader(testSet, batch_size=32, shuffle=False, num_workers=num_workers)
+    testSet = NUCLA_CrossView(root_list=path_list, dataType=dataType, clip=clip, phase='train', cam='2,1', T=T, setup=setup)
+    testloader = DataLoader(testSet, batch_size=1, shuffle=False, num_workers=num_workers)
 
     if recon:
         model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_recon_conv_dec/160.pth'
     elif transformer:
         # model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_exp9_dim50/T36_fista01_openpose/300.pth'
-        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_sc_exp12/T36_fista01_openpose/170.pth'
+        # model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/tenc_sc_exp12/T36_fista01_openpose/170.pth'
+        model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/sc_tenc_dyanf_exp10_2/T36_fista01_openpose/600.pth'
 
     else:
         model_path = '/home/balaji/RSL/Cross-View/ModelFile/crossView_NUCLA/Single/dyan_cl/T36_fista01_openpose/60.pth'
@@ -317,14 +471,14 @@ if __name__ == "__main__":
         net = Dyan_Autoencoder_reduce(Drr=Drr, Dtheta=Dtheta, dim=2, dataType=dataType, \
                     Inference=True, gpu_id=gpu_id, fistaLam=0.1, is_binary=False).cuda(gpu_id)
     elif transformer:
-        Drr = stateDict['sparse_coding.rr'].float()
-        Dtheta = stateDict['sparse_coding.theta'].float()
+        Drr = stateDict['sparseCoding.rr'].float()
+        Dtheta = stateDict['sparseCoding.theta'].float()
         is_binary = False
         print('Drr ', Drr)
         print('Dtheta ', Dtheta)
         print('is_binary ', is_binary)
-        net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=0.1, Inference=True, gpu_id=gpu_id, is_binary=is_binary).cuda(gpu_id)
-        # net = Dyan_Tenc(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=fistaLam, gpu_id=gpu_id).cuda(gpu_id)
+        # net = Tenc_SparseC_Cl(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=0.1, Inference=True, gpu_id=gpu_id, is_binary=is_binary).cuda(gpu_id)
+        net = Dyan_Tenc(num_class=num_class, Npole=N+1, Drr=Drr, Dtheta=Dtheta, dataType=dataType, dim=2, fistaLam=0.1, gpu_id=gpu_id).cuda(gpu_id)
     else:
         Drr = stateDict['sparseCoding.rr'].float()
         Dtheta = stateDict['sparseCoding.theta'].float()
@@ -333,8 +487,8 @@ if __name__ == "__main__":
                                         
     net.load_state_dict(stateDict)
 
-    #Acc = testing(testloader, net, gpu_id, clip)
-    Acc = visualize_cls(testloader, net, gpu_id, clip)
+    Acc = testing(testloader, net, gpu_id, clip)
+    # Acc = visualize_cls(testloader, net, gpu_id, clip)
     print('Acc:%.4f' % Acc)
     # visualize_reconstruct(testloader, net, gpu_id, clip)
     
